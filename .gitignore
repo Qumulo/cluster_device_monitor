@@ -3,3 +3,5 @@ app/config.py
 .vscode
 .DS_Store
 */.DS_Store
+.ipynb_checkpoints
+!/.gitignore
