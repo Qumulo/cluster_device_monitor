@@ -10,15 +10,46 @@ will then make a call to the email_alert.py script to send out an email alert
 to the specified recipients in config.
 """
 
-# TODO
-def cluster_login():
-    pass
+from config import API_HOSTNAME,API_USERNAME,API_PASSWORD
+import qumulo
+import os
+import time
+from qumulo.rest_client import RestClient
 
-# TODO
-def check_for_known_status():
-    pass
+def cluster_login(api_hostname, api_username, api_password):
+    """
+    Log into cluster via info in config.py and return rest client object.
+    """
+    print('Logging into cluster...')
+    rc = RestClient(api_hostname, 8000)
+    rc.login(api_username, api_password)
 
-# TODO
-def query_status():
-    pass
+    return rc
 
+def retrieve_cluster_nodes_status():
+    """
+    Retrieve status and information about nodes.
+    """
+    rc.cluster.list_nodes()
+    
+
+def retrieve_cluster_drives_status():
+    """
+    Retrieve status and information about drives.
+    """
+    rc.cluster.get_cluster_slots_status()
+
+
+
+
+
+# testing ....
+# rc = cluster_login(API_HOSTNAME, API_USERNAME, API_PASSWORD)
+
+
+
+
+"""
+Notes for later:
+- Get the value of a first node status: rc.cluster.list_nodes()[0]['node_status']
+"""
