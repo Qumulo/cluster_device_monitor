@@ -32,14 +32,11 @@ def retrieve_cluster_nodes_status():
     """
     rc.cluster.list_nodes()
     
-
 def retrieve_cluster_drives_status():
     """
     Retrieve status and information about drives.
     """
     rc.cluster.get_cluster_slots_status()
-
-
 
 
 
