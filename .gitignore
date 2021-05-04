@@ -6,3 +6,4 @@ app/config.py
 .ipynb_checkpoints
 !/.gitignore
 app/__pycache__
+app/cluster_state*.json

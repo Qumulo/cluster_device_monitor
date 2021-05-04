@@ -10,26 +10,35 @@ previous and current state of nodes & drives.
 
 import json
 import os
+from poll_cluster import (
+    retrieve_cluster_nodes_status, 
+    retrieve_cluster_drives_status
+)
+
+# constants
+PREVIOUS_EXISTED = False
 
 # TODO: 
 
-# XXX: maybe delete this? 
-def check_for_previous_state_file():
+def cluster_state_file_handling():
     """
-    Check for the existence of a cluster state file.
+    If cluster_state.json exists, rename it to cluster_state_previous.json.
+    Then create cluster_state.json and write node + drive statuses to file.
     """
-    pass
+    if 'cluster_state.json' in os.listdir():
+        os.rename('cluster_state.json','cluster_state_previous.json')
+        PREVIOUS_EXISTED = True
+    
+    with open('cluster_state.json', 'rw') as f:
+        f.write(retrieve_cluster_nodes_status)
+        f.write(retrieve_cluster_drives_status)
 
-def create_cluster_state_file():
-    """
-    Check whether previous cluster state exists and create it if it does not.
-    """
-    # call functions from poll cluster for node + drive state?
-    pass
+    return PREVIOUS_EXISTED
 
 def compare_states():
     """
     If a previous state file existed, then compare new cluster state to previous
-    cluster state and check for any changes, IE nodes offline or drive issues. 
+    cluster state and check for any changes, IE nodes offline or drive issues.
+    Once the comparison is complete, remove the previous state file.
     """
     pass

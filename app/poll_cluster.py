@@ -10,43 +10,78 @@ will then make a call to the email_alert.py script to send out an email alert
 to the specified recipients in config.
 """
 
-from config import API_HOSTNAME,API_USERNAME,API_PASSWORD
+from config import API_HOSTNAME, API_USERNAME, API_PASSWORD
 import qumulo
 import os
 import time
 from qumulo.rest_client import RestClient
 
+# TODO: add error/exception handling to all functions
+
 def cluster_login(api_hostname, api_username, api_password):
     """
     Log into cluster via info in config.py and return rest client object.
     """
-    print('Logging into cluster...')
-    rc = RestClient(api_hostname, 8000)
-    rc.login(api_username, api_password)
+    rest_client = RestClient(api_hostname, 8000)
+    rest_client.login(api_username, api_password)
 
-    return rc
+    return rest_client
 
-def retrieve_cluster_nodes_status():
+def retrieve_status_cluster_nodes(rest_client):
     """
-    Retrieve status and information about nodes.
+    Accept rest_client object to query cluster via API calls. Retrieve status
+    and info about nodes, then parse through info and only record relevant 
+    fields and return list object.
     """
-    rc.cluster.list_nodes()
+    node_relevant_fields = [
+        'id',
+        'node_status',
+        'node_name',
+        'uuid',
+        'model_number',
+        'serial_number',
+    ]
+
+    status_of_nodes = []
+    for num in range(len(rest_client.cluster.list_nodes())):
+        modified_dict = {}
+        for k,v in rest_client.cluster.list_nodes()[num].items():
+            if k in node_relevant_fields:
+                modified_dict[k] = v
+        status_of_nodes.append(modified_dict)
+
+    return status_of_nodes
     
-def retrieve_cluster_drives_status():
+def retrieve_status_cluster_drives(rest_client):
     """
-    Retrieve status and information about drives.
+    Accept rest_client object to query cluster via API calls. Retrieve status
+    and info about drives, then parse through info and only record relevant 
+    fields and return list object.
     """
-    rc.cluster.get_cluster_slots_status()
+    drive_relevant_fields = [
+        'id',
+        'node_id',
+        'slot',
+        'state',
+        'slot_type',
+        'disk_type',
+        'disk_model',
+        'disk_serial_number',
+        'capacity',
+    ]
 
+    status_of_drives = []
+    for num in range(len(rest_client.cluster.get_cluster_slots_status())):
+        modified_dict = {}
+        for k,v in rest_client.cluster.get_cluster_slots_status()[num].items():
+            if k in drive_relevant_fields:
+                modified_dict[k] = v
+        status_of_drives.append(modified_dict)
+
+    return status_of_drives
 
 
 # testing ....
-# rc = cluster_login(API_HOSTNAME, API_USERNAME, API_PASSWORD)
+# rest_client = cluster_login(API_HOSTNAME, API_USERNAME, API_PASSWORD)
 
 
-
-
-"""
-Notes for later:
-- Get the value of a first node status: rc.cluster.list_nodes()[0]['node_status']
-"""
