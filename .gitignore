@@ -5,3 +5,4 @@ app/config.py
 */.DS_Store
 .ipynb_checkpoints
 !/.gitignore
+app/__pycache__
