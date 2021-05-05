@@ -7,3 +7,4 @@ app/config.py
 !/.gitignore
 app/__pycache__
 app/cluster_state*.json
+cluster_state*.json
