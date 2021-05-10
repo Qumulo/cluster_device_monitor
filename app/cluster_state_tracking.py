@@ -8,6 +8,11 @@ doesn't already exist. If it does exist, then the script will compare the
 previous and current state of nodes & drives. 
 """
 
+# TODO: Add error/exception handling to all functions
+# TODO: Figure out how to write node + drive info to json file
+# TODO: Fix docstrings
+# TODO: fix config file to be json format?
+
 import json
 import os
 from poll_cluster import (
@@ -15,13 +20,9 @@ from poll_cluster import (
     retrieve_status_of_cluster_drives
 )
 
-
 # constants
 PREVIOUS_EXISTED = False
 
-# TODO: Add error/exception handling to all functions
-# TODO: Figure out how to write node + drive info to json file
-# TODO: Fix docstrings
 
 def cluster_state_file_handling(status_of_nodes, status_of_drives):
     """
