@@ -12,7 +12,7 @@ and record only the relevant fields that we care about.
 # TODO: make sure alert is NOT generated if cluster_state_previous.json has failure
 # TODO: upon new run, consider removing 'cluster_state_previous.json' ??
 
-from config import API_HOSTNAME, API_USERNAME, API_PASSWORD
+from config import API_HOSTNAME, API_USERNAME, API_PASSWORD # XXX: pull from email recip func
 import qumulo
 import json
 import os
@@ -164,9 +164,9 @@ def compare_states():
         data1, data2 = json.load(f1), json.load(f2)
         changes = data1 == data2
 
+    # XXX: can potentially remove all of this
     if changes:
         print('Changes found!! Scanning for unhealthy objects.') # XXX: Later remove
-        check_for_unhealthy_objects()
     else:
         print('Changes not found! Not scanning for unhealthy objects') # XXX: Later remove
 
@@ -208,6 +208,8 @@ def check_for_unhealthy_objects():
     if healthy:
         print('No unhealthy changes found.')
 
+    print(f'alert data: {alert_data}') # XXX: later remove
+
     return alert_data, healthy
 
 #  _____                 _ _ _   _                 _ _ _             
@@ -227,7 +229,7 @@ def generate_alert_email(alert_data, rest_client):
     """
 
     cluster_time = get_cluster_time(rest_client)
-    
+
     email_alert = """
     ALERT HERE. (Node: <FILL ME OUT>)
     Cluster Name:  <FILL ME OUT>
@@ -263,7 +265,7 @@ def send_email(email_alert, email_recipients):
 # | |\/| |/ _` | | '_ \ 
 # | |  | | (_| | | | | |
 # |_|  |_|\__,_|_|_| |_|
-                      
+
 
 def main():
     rest_client = cluster_login(API_HOSTNAME, API_USERNAME, API_PASSWORD)
