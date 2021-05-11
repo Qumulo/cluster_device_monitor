@@ -7,14 +7,17 @@ and record only the relevant fields that we care about.
 """
 
 # TODO: add error/exception handling to functions if needed
-# TODO: fix docstring for script
+# TODO: fix docstrings for all functions
 # TODO: add timeout logic to cluster_login()
+# TODO: make sure alert is NOT generated if cluster_state_previous.json has failure
+# TODO: upon new run, consider removing 'cluster_state_previous.json' ??
 
 from config import API_HOSTNAME, API_USERNAME, API_PASSWORD
 import qumulo
 import json
 import os
 import time
+from datetime import datetime
 from qumulo.rest_client import RestClient
 
 #   ___                           _    ____ ___ 
@@ -26,22 +29,31 @@ from qumulo.rest_client import RestClient
 
 def cluster_login(api_hostname, api_username, api_password):
     """
-    Log into cluster via info in config.py and return rest client object.
+    Accept api_hostname, api_username and api_password as parameters. Log into
+    cluster via Qumulo Rest API. Return rest_client for all future API calls.
     """
     rest_client = RestClient(api_hostname, 8000)
     rest_client.login(api_username, api_password)
 
     return rest_client
 
+def get_cluster_time(rest_client):
+    """
+    Get current cluster time and return as cluster_time.
+    """
+    
+    cluster_time = rest_client.time_config.get_time_status()['time']
+    
+    return cluster_time
+
 def get_qq_version(rest_client):
     """
-    Query API for Qumulo Core version.
+    Query API for Qumulo Core version. Return version as string.
     """
 
-    qq_version = rest_client.version.version()
-    print(f'QQ Version: {qq_version}')  # XXX Remove this after testing
+    qq_version = rest_client.version.version()['revision_id']
 
-    return qq_version    
+    return qq_version
 
 def retrieve_status_of_cluster_nodes(rest_client):
     """
@@ -106,7 +118,7 @@ def combine_statuses_formatting(status_of_nodes, status_of_drives):
     """
     In order to adhere to proper json formatting, this func will combine the
     two status_of_nodes and status_of_drives dictionary objects into one
-    single dictionary object.
+    single dictionary object and return this as cluster_status.
     """
     status_of_nodes['drives'] = status_of_drives['drives']    
     cluster_status = status_of_nodes
@@ -124,8 +136,9 @@ def check_for_previous_state(cluster_status):
     """
     If cluster_state.json exists, rename it to cluster_state_previous.json.
     Regardless of this, also create cluster_state.json and write node + drive
-    statuses to file. Return variable for previous_existed.
+    statuses to file. Return boolean for previous_existed.
     """
+
     if 'cluster_state.json' in os.listdir():
         os.rename('cluster_state.json','cluster_state_previous.json')
         previous_existed = True
@@ -141,12 +154,8 @@ def compare_states():
     """
     Only being ran if previous_existed is true, this func will compare the
     json files for the previous and current cluster state. Return bool for
-    whether or not the data has changed. Once the comparison is complete, 
-    remove the previous state file and rename cluster_state.json to
-    cluster_state_previous.json. Return bool for whether there changes.
-    """
-    
-    changes = False
+    whether or not the data has changed. Return bool for if changes were found.
+    """    
 
     file1 = 'cluster_state.json'
     file2 = 'cluster_state_previous.json'
@@ -156,22 +165,23 @@ def compare_states():
         changes = data1 == data2
 
     if changes:
-        print('Changes found!!')
-        changes = True
+        print('Changes found!! Scanning for unhealthy objects.') # XXX: Later remove
         check_for_unhealthy_objects()
     else:
-        print('Changes not found!')        
+        print('Changes not found! Not scanning for unhealthy objects') # XXX: Later remove
 
     return changes
 
 def check_for_unhealthy_objects():
     """ 
     Scan the cluster_state.json file to determine whether or not there are 
-    unhealthy objects.
+    unhealthy objects. If there are unhealthy objects, append the data to
+    new dict object called alert_data, which will later be used to populate
+    the alert. Also return whether or not cluster is healthy as bool. 
     """
     healthy = True
 
-    with open('cluster_state_TEST.json') as f:
+    with open('cluster_state_TEST.json') as f:  # XXX: Later change value to 'cluster_state.json'
         data = json.load(f)
         alert_data = {}
         counter = 1
@@ -181,16 +191,16 @@ def check_for_unhealthy_objects():
             for k,v in dictobj.items():
                 if k == 'node_status':
                     if v != 'online':
-                        print('ALERT!! UNHEALTHY NODE FOUND.')
+                        print('ALERT!! UNHEALTHY NODE FOUND.') # XXX: Later remove
                         alert_data[f'Event {counter}'] = dictobj
                         counter += 1
                         healthy = False
-        # scan through json for unhealthy drives                
+        # scan through json for unhealthy drives
         for dictobj in data['drives']:
             for k,v in dictobj.items():
                 if k == 'state':
                     if v != 'healthy':
-                        print('ALERT!! UNHEALTHY DRIVE FOUND.')                    
+                        print('ALERT!! UNHEALTHY DRIVE FOUND.') # XXX: Later remove 
                         alert_data[f'Event {counter}'] = dictobj   
                         counter += 1
                         healthy = False
@@ -207,7 +217,7 @@ def check_for_unhealthy_objects():
 # |_____|_| |_| |_|\__,_|_|_|_| |_|\__,_|_| |_|\__,_|_|_|_| |_|\__, |
 #                                                              |___/ 
 
-def generate_alert_email(alert_data):
+def generate_alert_email(alert_data, rest_client):
     """
     Generate email alert and return as string
     """
@@ -216,6 +226,8 @@ def generate_alert_email(alert_data):
     information and engage Qumulo Support in your preferred fashion.
     """
 
+    cluster_time = get_cluster_time(rest_client)
+    
     email_alert = """
     ALERT HERE. (Node: <FILL ME OUT>)
     Cluster Name:  <FILL ME OUT>
@@ -228,6 +240,15 @@ def generate_alert_email(alert_data):
     """
 
     return email_alert
+
+def get_email_recipients():
+    """
+    Pull email recipients from config file.
+    """
+
+    email_recipients = []
+
+    return email_recipients
 
 def send_email(email_alert, email_recipients):
     """
@@ -251,11 +272,22 @@ def main():
     status_of_drives = retrieve_status_of_cluster_drives(rest_client)
     cluster_status = combine_statuses_formatting(status_of_nodes, status_of_drives)
     previous_existed = check_for_previous_state(cluster_status)
-    # if previous_existed:
-    #     compare_states()
-    # else:
-    #     alert_data, healthy = check_for_unhealthy_objects()
 
+    if previous_existed:
+        changes = compare_states()
+        if changes:
+            alert_data, healthy = check_for_unhealthy_objects()        
+    else:
+        alert_data, healthy = check_for_unhealthy_objects()
+    
+    if not healthy:
+        email_alert = generate_alert_email(alert_data, rest_client)
+        email_recipients = get_email_recipients()
+        send_email(email_alert, email_recipients)
+    else:
+        print('New unhealthy objects were not found. Closing script') # XXX: Remove after testing
+        print(f'Empty alert data: {alert_data}')
+        # XXX: Add script close logic?
 
 if __name__ == '__main__':
     main()
