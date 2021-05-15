@@ -1,0 +1,17 @@
+"""
+json config file with necessary credential information and node IP address for
+cluster authentication. Email recipient list is also declared here for whom
+emails will be sent to.
+"""
+
+{
+    "cluster_settings": {
+        "cluster_address": "10.120.0.34",
+        "username": "admin",
+        "password": "Admin123",
+        "rest_port": 8000,
+    },
+    "email_settings": {
+        "mail_to": ["rthompson@qumulo.com",],
+    },
+}

@@ -37,14 +37,13 @@ def cluster_login(api_hostname, api_username, api_password):
 
     return rest_client
 
-def get_cluster_time(rest_client):
+def get_cluster_name(rest_client):
     """
-    Get current cluster time and return as cluster_time.
+    Query API for cluster name. Return cluster name as string.
     """
-    
-    cluster_time = rest_client.time_config.get_time_status()['time']
-    
-    return cluster_time
+    cluster_name = rest_client.cluster.get_cluster_conf()['cluster_name']
+
+    return cluster_name
 
 def get_qq_version(rest_client):
     """
@@ -54,6 +53,24 @@ def get_qq_version(rest_client):
     qq_version = rest_client.version.version()['revision_id']
 
     return qq_version
+
+def get_cluster_time(rest_client):
+    """
+    Get current cluster time and return as cluster_time.
+    """
+    
+    cluster_time = rest_client.time_config.get_time_status()['time']
+    
+    return cluster_time
+
+def get_cluser_uuid(rest_client):
+    """
+    Query API for cluster UUID number. Return UUID as string.
+    """
+    
+    cluster_uuid = rest_client.node_state.get_node_state()['cluster_id']
+    
+    return cluster_uuid
 
 def retrieve_status_of_cluster_nodes(rest_client):
     """
@@ -212,35 +229,67 @@ def check_for_unhealthy_objects():
 
     return alert_data, healthy
 
-#  _____                 _ _ _   _                 _ _ _             
-# | ____|_ __ ___   __ _(_) | | | | __ _ _ __   __| | (_)_ __   __ _ 
+#  _____                 _ _ _   _                 _ _ _
+# | ____|_ __ ___   __ _(_) | | | | __ _ _ __   __| | (_)_ __   __ _
 # |  _| | '_ ` _ \ / _` | | | |_| |/ _` | '_ \ / _` | | | '_ \ / _` |
 # | |___| | | | | | (_| | | |  _  | (_| | | | | (_| | | | | | | (_| |
 # |_____|_| |_| |_|\__,_|_|_|_| |_|\__,_|_| |_|\__,_|_|_|_| |_|\__, |
-#                                                              |___/ 
+#                                                              |___/
 
 def generate_alert_email(alert_data, rest_client):
     """
     Generate email alert and return as string
     """
 
-    string_for_alert = """ ALERT! Unhealthy objectrs found. See below for
-    information and engage Qumulo Support in your preferred fashion.
-    """
-
+    qq_version = get_qq_version(rest_client)
+    cluster_name = get_cluster_name(rest_client)
+    cluster_uuid = get_cluser_uuid(rest_client)
     cluster_time = get_cluster_time(rest_client)
+    
+    alert_header = '=' * 18 + ' CLUSTER EVENT ALERT! ' + '=' * 18
+    email_alert = f"""{alert_header}\nUnhealthy object(s) found. See below for info
+    and engage Qumulo Support in your preferred fashion.
 
-    email_alert = """
-    ALERT HERE. (Node: <FILL ME OUT>)
-    Cluster Name:  <FILL ME OUT>
-    Serial Number	<FILL ME OUT>
-    Cluster UUID	<FILL ME OUT>
-    Node UUID	<FILL ME OUT>
-    Node Type	<FILL ME OUT>
-    Node Inventory	<FILL ME OUT>
-    Software Version	<FILL ME OUT>
+    Cluster name: {cluster_name}
+    Cluster UUID: {cluster_uuid}
+    Approx. time: {cluster_time}
+
+    Event(s) found:
     """
 
+    node_event_heading = '=' * 15 + ' A node has gone offline. ' + '=' * 15
+    drive_event_heading = '=' * 15 + ' A drive is no longer healthy. ' + '=' * 15
+
+    for item in alert_data:
+        for k,v in alert_data[item].items():
+            if k == 'node_status':    # this is a node alert
+                email_alert += node_event_heading
+                node_alert_text = f"""
+                Node number: {alert_data[item]['id']}
+                Node status: {alert_data[item]['node_status']}
+                Serial Number: {alert_data[item]['serial_number']}
+                Node UUID: {alert_data[item]['uuid']}           
+                Node Type: {alert_data[item]['model_number']}
+                Qumulo Core Version: {qq_version}
+                """
+
+                email_alert += node_alert_text + '\n'
+
+            elif k == 'disk_type':    # this is a drive alert
+                email_alert += drive_event_heading
+                drive_alert_text = f"""
+                Node number: {alert_data[item]['node_id']}
+                Drive slot: {alert_data[item]['slot']}
+                Drive status: {alert_data[item]['state']}
+                Slot type: {alert_data[item]['slot_type']}
+                Disk type: {alert_data[item]['disk_type']}
+                Disk model: {alert_data[item]['disk_model']}
+                Disk serial number: {alert_data[item]['disk_serial_number']}
+                Disk capacity: {alert_data[item]['capacity']}
+                """
+
+                email_alert += drive_alert_text + '\n'
+    
     return email_alert
 
 def get_email_recipients():
@@ -260,16 +309,15 @@ def send_email(email_alert, email_recipients):
 
     pass
 
-#  __  __       _       
-# |  \/  | __ _(_)_ __  
-# | |\/| |/ _` | | '_ \ 
+#  __  __       _
+# |  \/  | __ _(_)_ __ 
+# | |\/| |/ _` | | '_ \
 # | |  | | (_| | | | | |
 # |_|  |_|\__,_|_|_| |_|
 
 
 def main():
     rest_client = cluster_login(API_HOSTNAME, API_USERNAME, API_PASSWORD)
-    qq_version = get_qq_version(rest_client)
     status_of_nodes = retrieve_status_of_cluster_nodes(rest_client)
     status_of_drives = retrieve_status_of_cluster_drives(rest_client)
     cluster_status = combine_statuses_formatting(status_of_nodes, status_of_drives)
@@ -287,8 +335,7 @@ def main():
         email_recipients = get_email_recipients()
         send_email(email_alert, email_recipients)
     else:
-        print('New unhealthy objects were not found. Closing script') # XXX: Remove after testing
-        print(f'Empty alert data: {alert_data}')
+        print('New unhealthy objects were NOT found. Closing script') # XXX: Remove after testing
         # XXX: Add script close logic?
 
 if __name__ == '__main__':
