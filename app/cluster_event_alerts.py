@@ -12,13 +12,38 @@ and record only the relevant fields that we care about.
 # TODO: make sure alert is NOT generated if cluster_state_previous.json has failure
 # TODO: upon new run, consider removing 'cluster_state_previous.json' ??
 
-from config import API_HOSTNAME, API_USERNAME, API_PASSWORD # XXX: pull from email recip func
+import config
 import qumulo
 import json
 import os
+import sys
 import time
 from datetime import datetime
 from qumulo.rest_client import RestClient
+
+#  _   _ _____ _     ____  _____ ____  ____
+# | | | | ____| |   |  _ \| ____|  _ \/ ___|
+# | |_| |  _| | |   | |_) |  _| | |_) \___ \
+# |  _  | |___| |___|  __/| |___|  _ < ___) |
+# |_| |_|_____|_____|_|   |_____|_| \_\____/
+
+
+def load_json(file: str) -> Dict[str, Any]:
+    """Load a file and ensure that it's valid JSON."""
+    try:
+        file_fh = open(file, 'r')
+        data = json.load(file_fh)
+        return data
+    except ValueError as error:
+        sys.exit(f'Invalid JSON file: {file}. Error: {error}')
+    finally:
+        file_fh.close()
+
+def load_config(config_file: str) -> Dict[str, Any]:
+    if os.path.exists(config_file):
+        return load_json(config_file)
+    else:
+        sys.exit(f'Configuration file "{config_file}" does not exist.')
 
 #   ___                           _    ____ ___ 
 #  / _ \ _   _  ___ _ __ _   _   / \  |  _ \_ _|
@@ -296,8 +321,10 @@ def get_email_recipients():
     """
     Pull email recipients from config file.
     """
-
     email_recipients = []
+
+    for email in thisthing['email_settings']['mail_to']:
+        email_recipients.append(email)
 
     return email_recipients
 
@@ -316,7 +343,11 @@ def send_email(email_alert, email_recipients):
 # |_|  |_|\__,_|_|_| |_|
 
 
-def main():
+def main():  
+    load_config(config)
+    API_HOSTNAME = config['cluster_settings']['cluster_address']
+    API_USERNAME = config['cluster_settings']['username']
+    API_PASSWORD = config['cluster_settings']['password']
     rest_client = cluster_login(API_HOSTNAME, API_USERNAME, API_PASSWORD)
     status_of_nodes = retrieve_status_of_cluster_nodes(rest_client)
     status_of_drives = retrieve_status_of_cluster_drives(rest_client)
