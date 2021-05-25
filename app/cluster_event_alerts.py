@@ -390,4 +390,4 @@ def main():
         # XXX: Add script close logic?
 
 if __name__ == '__main__':
-    main()
+    main() 
