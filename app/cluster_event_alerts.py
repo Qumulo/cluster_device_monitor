@@ -11,14 +11,18 @@ and record only the relevant fields that we care about.
 # TODO: add timeout logic to cluster_login()
 # TODO: make sure alert is NOT generated if cluster_state_previous.json has failure
 # TODO: upon new run, consider removing 'cluster_state_previous.json' ??
+# TODO: add check for port connectivity & ability to reach target IP address
 
-import config
-import qumulo
+
+import argparse
 import json
 import os
+import smtplib
 import sys
 import time
 from datetime import datetime
+from email.mime.text import MIMEText
+import qumulo
 from qumulo.rest_client import RestClient
 
 #  _   _ _____ _     ____  _____ ____  ____
@@ -27,9 +31,10 @@ from qumulo.rest_client import RestClient
 # |  _  | |___| |___|  __/| |___|  _ < ___) |
 # |_| |_|_____|_____|_|   |_____|_| \_\____/
 
-
-def load_json(file: str) -> Dict[str, Any]:
-    """Load a file and ensure that it's valid JSON."""
+def load_json(file: str):
+    """
+    Load a file and ensure that it's valid JSON.
+    """
     try:
         file_fh = open(file, 'r')
         data = json.load(file_fh)
@@ -39,7 +44,10 @@ def load_json(file: str) -> Dict[str, Any]:
     finally:
         file_fh.close()
 
-def load_config(config_file: str) -> Dict[str, Any]:
+def load_config(config_file: str):
+    """
+    Load json as json dictionary-like object for parsing.
+    """    
     if os.path.exists(config_file):
         return load_json(config_file)
     else:
@@ -92,7 +100,6 @@ def get_cluser_uuid(rest_client):
     """
     Query API for cluster UUID number. Return UUID as string.
     """
-    
     cluster_uuid = rest_client.node_state.get_node_state()['cluster_id']
     
     return cluster_uuid
@@ -180,7 +187,6 @@ def check_for_previous_state(cluster_status):
     Regardless of this, also create cluster_state.json and write node + drive
     statuses to file. Return boolean for previous_existed.
     """
-
     if 'cluster_state.json' in os.listdir():
         os.rename('cluster_state.json','cluster_state_previous.json')
         previous_existed = True
@@ -243,14 +249,14 @@ def check_for_unhealthy_objects():
                 if k == 'state':
                     if v != 'healthy':
                         print('ALERT!! UNHEALTHY DRIVE FOUND.') # XXX: Later remove 
-                        alert_data[f'Event {counter}'] = dictobj   
+                        alert_data[f'Event {counter}'] = dictobj
                         counter += 1
                         healthy = False
             
     if healthy:
         print('No unhealthy changes found.')
 
-    print(f'alert data: {alert_data}') # XXX: later remove
+    # print(f'alert data: {alert_data}') # XXX: later remove
 
     return alert_data, healthy
 
@@ -271,18 +277,20 @@ def generate_alert_email(alert_data, rest_client):
     cluster_uuid = get_cluser_uuid(rest_client)
     cluster_time = get_cluster_time(rest_client)
     
-    alert_header = '=' * 18 + ' CLUSTER EVENT ALERT! ' + '=' * 18
+    counter = 0
+    for objs in alert_data:
+        counter += 1
+    alert_header = '=' * 19 + ' CLUSTER EVENT ALERT! ' + '=' * 19
     email_alert = f"""{alert_header}\nUnhealthy object(s) found. See below for info
-    and engage Qumulo Support in your preferred fashion.
+and engage Qumulo Support in your preferred fashion.
 
-    Cluster name: {cluster_name}
-    Cluster UUID: {cluster_uuid}
-    Approx. time: {cluster_time}
+Cluster name: {cluster_name}
+Cluster UUID: {cluster_uuid}
+Approx. time: {cluster_time} UTC
 
-    Event(s) found:
-    """
+{counter} Event(s) found:\n\n"""
 
-    node_event_heading = '=' * 15 + ' A node has gone offline. ' + '=' * 15
+    node_event_heading = '=' * 17 + ' A node has gone offline. ' + '=' * 17
     drive_event_heading = '=' * 15 + ' A drive is no longer healthy. ' + '=' * 15
 
     for item in alert_data:
@@ -290,51 +298,64 @@ def generate_alert_email(alert_data, rest_client):
             if k == 'node_status':    # this is a node alert
                 email_alert += node_event_heading
                 node_alert_text = f"""
-                Node number: {alert_data[item]['id']}
-                Node status: {alert_data[item]['node_status']}
-                Serial Number: {alert_data[item]['serial_number']}
-                Node UUID: {alert_data[item]['uuid']}           
-                Node Type: {alert_data[item]['model_number']}
-                Qumulo Core Version: {qq_version}
-                """
+Node number: {alert_data[item]['id']}
+Node status: {alert_data[item]['node_status']}
+Serial Number: {alert_data[item]['serial_number']}
+Node UUID: {alert_data[item]['uuid']}           
+Node Type: {alert_data[item]['model_number']}
+Qumulo Core Version: {qq_version}"""
 
-                email_alert += node_alert_text + '\n'
+                email_alert += node_alert_text + '\n\n'
 
             elif k == 'disk_type':    # this is a drive alert
                 email_alert += drive_event_heading
                 drive_alert_text = f"""
-                Node number: {alert_data[item]['node_id']}
-                Drive slot: {alert_data[item]['slot']}
-                Drive status: {alert_data[item]['state']}
-                Slot type: {alert_data[item]['slot_type']}
-                Disk type: {alert_data[item]['disk_type']}
-                Disk model: {alert_data[item]['disk_model']}
-                Disk serial number: {alert_data[item]['disk_serial_number']}
-                Disk capacity: {alert_data[item]['capacity']}
-                """
+Node number: {alert_data[item]['node_id']}
+Drive slot: {alert_data[item]['slot']}
+Drive status: {alert_data[item]['state']}
+Slot type: {alert_data[item]['slot_type']}
+Disk type: {alert_data[item]['disk_type']}
+Disk model: {alert_data[item]['disk_model']}
+Disk serial number: {alert_data[item]['disk_serial_number']}
+Disk capacity: {alert_data[item]['capacity']}"""
 
                 email_alert += drive_alert_text + '\n'
     
     return email_alert
 
-def get_email_recipients():
+def get_email_settings(config):
     """
-    Pull email recipients from config file.
+    Pull various email settings from config file.
     """
+    sender_addr = config['email_settings']['sender_address']
+    server_addr = config['email_settings']['server_address']
+
     email_recipients = []
+    for email_addr in config['email_settings']['mail_to']:
+        email_recipients.append(email_addr)
 
-    for email in thisthing['email_settings']['mail_to']:
-        email_recipients.append(email)
+    return sender_addr, server_addr, email_recipients
 
-    return email_recipients
-
-def send_email(email_alert, email_recipients):
+def send_email(config, email_alert):
     """
     Send an email populated with alert information to all email addresses in
     receipients list specified in config.py.
     """
-
-    pass
+    sender_addr, server_addr, email_recipients = get_email_settings(config)
+    clustername = config['cluster_settings']['cluster_name']
+    subject = f'Event alert for cluster: {clustername}!!'
+    
+    print(f'Sending the below email to {email_recipients}:\n\n{email_alert}') # XXX: Remove later
+    
+    # Compose the email to be sent based off received data.
+    mmsg = MIMEText(email_alert, 'html')
+    mmsg['Subject'] = subject
+    mmsg['From'] = sender_addr
+    mmsg['To'] = ', '.join(email_recipients)
+    
+    session = smtplib.SMTP(server_addr, 587)
+    session.sendmail(sender_addr, email_recipients, mmsg.as_string())
+    session.quit()
 
 #  __  __       _
 # |  \/  | __ _(_)_ __ 
@@ -344,7 +365,7 @@ def send_email(email_alert, email_recipients):
 
 
 def main():  
-    load_config(config)
+    config = load_config('config.json')
     API_HOSTNAME = config['cluster_settings']['cluster_address']
     API_USERNAME = config['cluster_settings']['username']
     API_PASSWORD = config['cluster_settings']['password']
@@ -363,8 +384,7 @@ def main():
     
     if not healthy:
         email_alert = generate_alert_email(alert_data, rest_client)
-        email_recipients = get_email_recipients()
-        send_email(email_alert, email_recipients)
+        send_email(config, email_alert)
     else:
         print('New unhealthy objects were NOT found. Closing script') # XXX: Remove after testing
         # XXX: Add script close logic?

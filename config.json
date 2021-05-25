@@ -1,0 +1,14 @@
+{
+    "cluster_settings": {
+        "cluster_address": "10.120.0.34",
+        "cluster_name": "CoffeeTime",
+        "username": "admin",
+        "password": "Admin123",
+        "rest_port": 8000
+    },
+    "email_settings": {
+        "sender_address": "event_alerts@qumulo.com",
+        "server_address": "10.120.0.39",
+        "mail_to": ["rthompson@qumulo.com"]
+    }
+}
