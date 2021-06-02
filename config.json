@@ -8,7 +8,7 @@
     },
     "email_settings": {
         "sender_address": "event_alerts@qumulo.com",
-        "server_address": "10.120.0.39",
+        "server_address": "mail.corp.qumulo.com",
         "mail_to": ["rthompson@qumulo.com"]
     }
 }

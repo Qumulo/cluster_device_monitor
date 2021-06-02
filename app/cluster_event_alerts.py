@@ -9,10 +9,9 @@ and record only the relevant fields that we care about.
 # TODO: add error/exception handling to functions if needed
 # TODO: fix docstrings for all functions
 # TODO: add timeout logic to cluster_login()
-# TODO: make sure alert is NOT generated if cluster_state_previous.json has failure
-# TODO: upon new run, consider removing 'cluster_state_previous.json' ??
 # TODO: add check for port connectivity & ability to reach target IP address
-
+# TODO: adding typing to function defs
+# TODO: Change COMPARE_STATES figlet header to something shorter
 
 import argparse
 import json
@@ -53,12 +52,26 @@ def load_config(config_file: str):
     else:
         sys.exit(f'Configuration file "{config_file}" does not exist.')
 
-#   ___                           _    ____ ___ 
-#  / _ \ _   _  ___ _ __ _   _   / \  |  _ \_ _|
-# | | | | | | |/ _ \ '__| | | | / _ \ | |_) | | 
-# | |_| | |_| |  __/ |  | |_| |/ ___ \|  __/| | 
-#  \__\_\\__,_|\___|_|   \__, /_/   \_\_|  |___|
-#                        |___/                  
+def check_cluster_connectivity(config_file):
+    """
+    Verify that the cluster is reachable over required port. 
+    """
+    pass
+
+def cluster_state_previous_file_cleanup():
+    """
+    Delete cluster_state_previous.json if it exists after script run.
+    """
+
+    if 'cluster_state_previous.json' in os.listdir():
+        os.remove('cluster_state_previous.json')
+
+#   ___  _   _ _____ ______   __     _    ____ ___ 
+#  / _ \| | | | ____|  _ \ \ / /    / \  |  _ \_ _|
+# | | | | | | |  _| | |_) \ V /    / _ \ | |_) | | 
+# | |_| | |_| | |___|  _ < | |    / ___ \|  __/| | 
+#  \__\_\\___/|_____|_| \_\|_|___/_/   \_\_|  |___|
+#                           |_____|                
 
 def cluster_login(api_hostname, api_username, api_password):
     """
@@ -174,12 +187,12 @@ def combine_statuses_formatting(status_of_nodes, status_of_drives):
     
     return cluster_status
 
-#   ____                                     ____  _        _            
-#  / ___|___  _ __ ___  _ __   __ _ _ __ ___/ ___|| |_ __ _| |_ ___  ___ 
-# | |   / _ \| '_ ` _ \| '_ \ / _` | '__/ _ \___ \| __/ _` | __/ _ \/ __|
-# | |__| (_) | | | | | | |_) | (_| | | |  __/___) | || (_| | ||  __/\__ \
-#  \____\___/|_| |_| |_| .__/ \__,_|_|  \___|____/ \__\__,_|\__\___||___/
-#                      |_|                                               
+#   ____ ___  __  __ ____   _    ____  _____     ____ _____  _  _____ _____ ____  
+#  / ___/ _ \|  \/  |  _ \ / \  |  _ \| ____|   / ___|_   _|/ \|_   _| ____/ ___| 
+# | |  | | | | |\/| | |_) / _ \ | |_) |  _|     \___ \ | | / _ \ | | |  _| \___ \ 
+# | |__| |_| | |  | |  __/ ___ \|  _ <| |___     ___) || |/ ___ \| | | |___ ___) |
+#  \____\___/|_|  |_|_| /_/   \_\_| \_\_____|___|____/ |_/_/   \_\_| |_____|____/ 
+#                                          |_____|                                
 
 def check_for_previous_state(cluster_status):
     """
@@ -210,13 +223,13 @@ def compare_states():
 
     with open(file1) as f1, open(file2) as f2:
         data1, data2 = json.load(f1), json.load(f2)
-        changes = data1 == data2
+        changes = data1 != data2
 
-    # XXX: can potentially remove all of this
+    # XXX: Remove this block after testing
     if changes:
-        print('Changes found!! Scanning for unhealthy objects.') # XXX: Later remove
+        print('Changes found!! Scanning for unhealthy objects.')
     else:
-        print('Changes not found! Not scanning for unhealthy objects') # XXX: Later remove
+        print('Changes not found! NOT scanning for unhealthy objects')
 
     return changes
 
@@ -229,7 +242,7 @@ def check_for_unhealthy_objects():
     """
     healthy = True
 
-    with open('cluster_state_TEST.json') as f:  # XXX: Later change value to 'cluster_state.json'
+    with open('cluster_state.json') as f:
         data = json.load(f)
         alert_data = {}
         counter = 1
@@ -256,22 +269,18 @@ def check_for_unhealthy_objects():
     if healthy:
         print('No unhealthy changes found.')
 
-    # print(f'alert data: {alert_data}') # XXX: later remove
-
     return alert_data, healthy
 
-#  _____                 _ _ _   _                 _ _ _
-# | ____|_ __ ___   __ _(_) | | | | __ _ _ __   __| | (_)_ __   __ _
-# |  _| | '_ ` _ \ / _` | | | |_| |/ _` | '_ \ / _` | | | '_ \ / _` |
-# | |___| | | | | | (_| | | |  _  | (_| | | | | (_| | | | | | | (_| |
-# |_____|_| |_| |_|\__,_|_|_|_| |_|\__,_|_| |_|\__,_|_|_|_| |_|\__, |
-#                                                              |___/
-
+#  _____ __  __    _    ___ _     ___ _   _  ____ 
+# | ____|  \/  |  / \  |_ _| |   |_ _| \ | |/ ___|
+# |  _| | |\/| | / _ \  | || |    | ||  \| | |  _ 
+# | |___| |  | |/ ___ \ | || |___ | || |\  | |_| |
+# |_____|_|  |_/_/   \_\___|_____|___|_| \_|\____|
+                                                
 def generate_alert_email(alert_data, rest_client):
     """
     Generate email alert and return as string
     """
-
     qq_version = get_qq_version(rest_client)
     cluster_name = get_cluster_name(rest_client)
     cluster_uuid = get_cluser_uuid(rest_client)
@@ -281,17 +290,17 @@ def generate_alert_email(alert_data, rest_client):
     for objs in alert_data:
         counter += 1
     alert_header = '=' * 19 + ' CLUSTER EVENT ALERT! ' + '=' * 19
-    email_alert = f"""{alert_header}\nUnhealthy object(s) found. See below for info
-and engage Qumulo Support in your preferred fashion.
+    email_alert = f"""{alert_header}\nUnhealthy object(s) found. See below for\
+ info and engage Qumulo Support in your preferred fashion.
 
 Cluster name: {cluster_name}
 Cluster UUID: {cluster_uuid}
 Approx. time: {cluster_time} UTC
 
-{counter} Event(s) found:\n\n"""
+{counter} Event(s) found:\n"""
 
-    node_event_heading = '=' * 17 + ' A node has gone offline. ' + '=' * 17
-    drive_event_heading = '=' * 15 + ' A drive is no longer healthy. ' + '=' * 15
+    node_event_heading = '=' * 23 + ' NODE OFFLINE ' + '=' * 23
+    drive_event_heading = '=' * 21 + ' DRIVE UNHEALTHY ' + '=' * 22
 
     for item in alert_data:
         for k,v in alert_data[item].items():
@@ -321,14 +330,16 @@ Disk capacity: {alert_data[item]['capacity']}"""
 
                 email_alert += drive_alert_text + '\n'
     
+    email_alert = email_alert.replace('\n', '<br>')
+    
     return email_alert
 
-def get_email_settings(config):
+def get_email_settings(config_file):
     """
     Pull various email settings from config file.
     """
-    sender_addr = config['email_settings']['sender_address']
-    server_addr = config['email_settings']['server_address']
+    sender_addr = config_file['email_settings']['sender_address']
+    server_addr = config_file['email_settings']['server_address']
 
     email_recipients = []
     for email_addr in config['email_settings']['mail_to']:
@@ -336,58 +347,63 @@ def get_email_settings(config):
 
     return sender_addr, server_addr, email_recipients
 
-def send_email(config, email_alert):
+def send_email(config_file, email_alert):
     """
     Send an email populated with alert information to all email addresses in
     receipients list specified in config.py.
     """
-    sender_addr, server_addr, email_recipients = get_email_settings(config)
-    clustername = config['cluster_settings']['cluster_name']
-    subject = f'Event alert for cluster: {clustername}!!'
-    
-    print(f'Sending the below email to {email_recipients}:\n\n{email_alert}') # XXX: Remove later
-    
+    sender_addr, server_addr, email_recipients = get_email_settings(config_file)
+    clustername = config_file['cluster_settings']['cluster_name']
+    subject = f'Event alert for cluster: {clustername}'
+        
     # Compose the email to be sent based off received data.
     mmsg = MIMEText(email_alert, 'html')
     mmsg['Subject'] = subject
     mmsg['From'] = sender_addr
     mmsg['To'] = ', '.join(email_recipients)
-    
-    session = smtplib.SMTP(server_addr, 587)
+
+    session = smtplib.SMTP(server_addr)
     session.sendmail(sender_addr, email_recipients, mmsg.as_string())
     session.quit()
 
-#  __  __       _
-# |  \/  | __ _(_)_ __ 
-# | |\/| |/ _` | | '_ \
-# | |  | | (_| | | | | |
-# |_|  |_|\__,_|_|_| |_|
-
+#  __  __    _    ___ _   _ 
+# |  \/  |  / \  |_ _| \ | |
+# | |\/| | / _ \  | ||  \| |
+# | |  | |/ ___ \ | || |\  |
+# |_|  |_/_/   \_\___|_| \_|
 
 def main():  
-    config = load_config('config.json')
-    API_HOSTNAME = config['cluster_settings']['cluster_address']
-    API_USERNAME = config['cluster_settings']['username']
-    API_PASSWORD = config['cluster_settings']['password']
+    config_file = load_config('config.json')
+    API_HOSTNAME = config_file['cluster_settings']['cluster_address']
+    API_USERNAME = config_file['cluster_settings']['username']
+    API_PASSWORD = config_file['cluster_settings']['password']
     rest_client = cluster_login(API_HOSTNAME, API_USERNAME, API_PASSWORD)
     status_of_nodes = retrieve_status_of_cluster_nodes(rest_client)
     status_of_drives = retrieve_status_of_cluster_drives(rest_client)
     cluster_status = combine_statuses_formatting(status_of_nodes, status_of_drives)
     previous_existed = check_for_previous_state(cluster_status)
 
+    # previous state logic handling
     if previous_existed:
         changes = compare_states()
         if changes:
-            alert_data, healthy = check_for_unhealthy_objects()        
+            alert_data, healthy = check_for_unhealthy_objects()
+        else:
+            healthy = True
     else:
         alert_data, healthy = check_for_unhealthy_objects()
-    
+
+    # email alert generation
     if not healthy:
+        print('Cluster event found! Generating email')
         email_alert = generate_alert_email(alert_data, rest_client)
-        send_email(config, email_alert)
+        send_email(config_file, email_alert)
     else:
-        print('New unhealthy objects were NOT found. Closing script') # XXX: Remove after testing
-        # XXX: Add script close logic?
+        print('New unhealthy objects were NOT found. Closing script') # XXX: Remove l8r
+    
+    cluster_state_previous_file_cleanup()
+
+    return 0
 
 if __name__ == '__main__':
-    main() 
+    sys.exit(main())
