@@ -241,30 +241,30 @@ def check_for_unhealthy_objects():
     the alert. Also return whether or not cluster is healthy as bool. 
     """
     healthy = True
+    alert_data = {}
+    counter = 1
 
     with open('cluster_state.json') as f:
         data = json.load(f)
-        alert_data = {}
-        counter = 1
         
-        # scan through json for offline nodes
-        for dictobj in data['nodes']:
-            for k,v in dictobj.items():
-                if k == 'node_status':
-                    if v != 'online':
-                        print('ALERT!! UNHEALTHY NODE FOUND.') # XXX: Later remove
-                        alert_data[f'Event {counter}'] = dictobj
-                        counter += 1
-                        healthy = False
-        # scan through json for unhealthy drives
-        for dictobj in data['drives']:
-            for k,v in dictobj.items():
-                if k == 'state':
-                    if v != 'healthy':
-                        print('ALERT!! UNHEALTHY DRIVE FOUND.') # XXX: Later remove 
-                        alert_data[f'Event {counter}'] = dictobj
-                        counter += 1
-                        healthy = False
+    # scan through json for offline nodes
+    for dictobj in data['nodes']:
+        for k,v in dictobj.items():
+            if k == 'node_status':
+                if v != 'online':
+                    print('ALERT!! UNHEALTHY NODE FOUND.') # XXX: Later remove
+                    alert_data[f'Event {counter}'] = dictobj
+                    counter += 1
+                    healthy = False
+    # scan through json for unhealthy drives
+    for dictobj in data['drives']:
+        for k,v in dictobj.items():
+            if k == 'state':
+                if v != 'healthy':
+                    print('ALERT!! UNHEALTHY DRIVE FOUND.') # XXX: Later remove 
+                    alert_data[f'Event {counter}'] = dictobj
+                    counter += 1
+                    healthy = False
             
     if healthy:
         print('No unhealthy changes found.')
