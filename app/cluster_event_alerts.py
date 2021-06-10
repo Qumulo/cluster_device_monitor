@@ -6,28 +6,24 @@ to get the status of drives and nodes. The script will parse through the output
 and record only the relevant fields that we care about. 
 """
 
-# TODO: add error/exception handling to functions if needed
 # TODO: fix docstrings for all functions
-# TODO: add timeout logic to cluster_login()
-# TODO: add timeouts to all API calls
-# TODO: add check for port connectivity & ability to reach target IP address
 # TODO: adding typing to function defs
-# TODO: Change COMPARE_STATES figlet header to something shorter
-# TODO: Consider email functionality for if script times out? 
 
-import argparse
+# XXX Unused
+# import argparse
+# import time
+# from datetime import datetime
+# from smtplib import SMTPRecipientsRefused, SMTPConnectError
+
 import json
 import os
 import smtplib
+import socket
 import sys
-import time
-from datetime import datetime
 from email.mime.text import MIMEText
 import qumulo
 from qumulo.rest_client import RestClient
 from qumulo.lib.request import RequestError
-from smtplib import SMTPRecipientsRefused, SMTPConnectError
-
 
 #  _   _ _____ _     ____  _____ ____  ____
 # | | | | ____| |   |  _ \| ____|  _ \/ ___|
@@ -48,6 +44,18 @@ def load_json(file: str):
     finally:
         file_fh.close()
 
+def check_cluster_connectivity_with_socket(config_file):
+    host_ip = config_file['cluster_settings']['cluster_address']
+    rest_port = config_file['cluster_settings']['rest_port']
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    result_of_check = sock.connect((host_ip, rest_port))
+
+    if result_of_check != 0:
+        print('ERROR! Unable to communicate with cluster over specified port.')
+        sys.exit(f'Err code: {result_of_check}\nPlease try again. Exiting...')
+
 def load_config(config_file: str):
     """
     Load json as json dictionary-like object for parsing.
@@ -57,26 +65,19 @@ def load_config(config_file: str):
     else:
         sys.exit(f'Config file "{config_file}" does not exist. Exiting...')
 
-def check_cluster_connectivity(config_file):
-    """
-    Verify that the cluster is reachable over required port(s). 
-    """
-    pass
-
 def delete_previous_cluster_state_file():
     """
     Delete cluster_state_previous.json if it exists.
     """
-
     if 'cluster_state_previous.json' in os.listdir():
         os.remove('cluster_state_previous.json')
 
-#   ___  _   _ _____ ______   __     _    ____ ___ 
+#   ___  _   _ _____ ______   __     _    ____ ___
 #  / _ \| | | | ____|  _ \ \ / /    / \  |  _ \_ _|
-# | | | | | | |  _| | |_) \ V /    / _ \ | |_) | | 
-# | |_| | |_| | |___|  _ < | |    / ___ \|  __/| | 
+# | | | | | | |  _| | |_) \ V /    / _ \ | |_) | |
+# | |_| | |_| | |___|  _ < | |    / ___ \|  __/| |
 #  \__\_\\___/|_____|_| \_\|_|___/_/   \_\_|  |___|
-#                           |_____|                
+#                           |_____|
 
 def cluster_login(api_hostname, api_username, api_password):
     """
@@ -88,11 +89,11 @@ def cluster_login(api_hostname, api_username, api_password):
         rest_client = RestClient(api_hostname, 8000)
         rest_client.login(api_username, api_password)
         return rest_client
-    except OSError as err1:
-        sys.exit(f'{err1}\nExiting...')
-    except TimeoutError as err2:
-        sys.exit(f'{err2}\nExiting...')
-    except RequestError as err3:
+    except OSError as e:
+        sys.exit(f'{e}\nExiting...')
+    except TimeoutError as e:
+        sys.exit(f'{e}\nExiting...')
+    except RequestError as e:
         print('Invalid credentials. Please check config file & try again.')
         sys.exit('Exiting...')
 
@@ -103,8 +104,9 @@ def get_cluster_name(rest_client):
     try:
         cluster_name = rest_client.cluster.get_cluster_conf()['cluster_name']
         return cluster_name
-    except TimeoutError as err1:
-        sys.exit(f'{err1}\nExiting...')
+    except TimeoutError as e:
+        api_timeout_send_email()
+        sys.exit(f'{e}\nExiting...')
 
 def get_qq_version(rest_client):
     """
@@ -113,8 +115,9 @@ def get_qq_version(rest_client):
     try:
         qq_version = rest_client.version.version()['revision_id']
         return qq_version
-    except TimeoutError as err1:
-        sys.exit(f'{err1}\nExiting...')
+    except TimeoutError as e:
+        api_timeout_send_email()
+        sys.exit(f'{e}\nExiting...')
 
 def get_cluster_time(rest_client):
     """
@@ -123,8 +126,9 @@ def get_cluster_time(rest_client):
     try:
         cluster_time = rest_client.time_config.get_time_status()['time']
         return cluster_time
-    except TimeoutError as err1:
-        sys.exit(f'{err1}\nExiting...')
+    except TimeoutError as e:
+        api_timeout_send_email()
+        sys.exit(f'{e}\nExiting...')
 
 def get_cluser_uuid(rest_client):
     """
@@ -133,8 +137,9 @@ def get_cluser_uuid(rest_client):
     try:
         cluster_uuid = rest_client.node_state.get_node_state()['cluster_id']
         return cluster_uuid
-    except TimeoutError as err1:
-        sys.exit(f'{err1}\nExiting...')
+    except TimeoutError as e:
+        api_timeout_send_email()
+        sys.exit(f'{e}\nExiting...')
 
 def retrieve_status_of_cluster_nodes(rest_client):
     """
@@ -163,8 +168,9 @@ def retrieve_status_of_cluster_nodes(rest_client):
         
         status_of_nodes['nodes'] = temp_list
         return status_of_nodes
-    except TimeoutError as err1:
-        sys.exit(f'{err1}\nExiting...')
+    except TimeoutError as e:
+        api_timeout_send_email()
+        sys.exit(f'{e}\nExiting...')
 
 def retrieve_status_of_cluster_drives(rest_client):
     """
@@ -196,8 +202,9 @@ def retrieve_status_of_cluster_drives(rest_client):
 
         status_of_drives['drives'] = temp_list
         return status_of_drives
-    except TimeoutError as err1:
-        sys.exit(f'{err1}\nExiting...')
+    except TimeoutError as e:
+        api_timeout_send_email()
+        sys.exit(f'{e}\nExiting...')
 
 def combine_statuses_formatting(status_of_nodes, status_of_drives):
     """
@@ -210,12 +217,12 @@ def combine_statuses_formatting(status_of_nodes, status_of_drives):
     
     return cluster_status
 
-#   ____ ___  __  __ ____   _    ____  _____     ____ _____  _  _____ _____ ____  
-#  / ___/ _ \|  \/  |  _ \ / \  |  _ \| ____|   / ___|_   _|/ \|_   _| ____/ ___| 
-# | |  | | | | |\/| | |_) / _ \ | |_) |  _|     \___ \ | | / _ \ | | |  _| \___ \ 
-# | |__| |_| | |  | |  __/ ___ \|  _ <| |___     ___) || |/ ___ \| | | |___ ___) |
-#  \____\___/|_|  |_|_| /_/   \_\_| \_\_____|___|____/ |_/_/   \_\_| |_____|____/ 
-#                                          |_____|                                
+#  ____  _______     _____ _______        __       ____    _  _____  _
+# |  _ \| ____\ \   / /_ _| ____\ \      / /      |  _ \  / \|_   _|/ \
+# | |_) |  _|  \ \ / / | ||  _|  \ \ /\ / /       | | | |/ _ \ | | / _ \
+# |  _ <| |___  \ V /  | || |___  \ V  V /        | |_| / ___ \| |/ ___ \
+# |_| \_\_____|  \_/  |___|_____|  \_/\_/____ ____|____/_/   \_\_/_/   \_\
+#                                      |_____|_____|
 
 def check_for_previous_state(cluster_status):
     """
@@ -248,7 +255,7 @@ def compare_states():
         data1, data2 = json.load(f1), json.load(f2)
         changes = data1 != data2
 
-    # XXX: Remove this block after testing
+    # XXX: testing
     if changes:
         print('Changes found!! Scanning for unhealthy objects.')
     else:
@@ -256,6 +263,52 @@ def compare_states():
 
     return changes
 
+def get_current_state():
+    data = {}
+
+    with open('cluster_state.json') as f:
+        data = json.load(f)
+
+    return data
+
+def check_for_unhealthy_objects():
+    """
+    Scan the cluster_state.json file to determine whether or not there are
+    unhealthy objects. If there are unhealthy objects, append the data to
+    new dict object called alert_data, which will later be used to populate
+    the alert. Also return whether or not cluster is healthy as bool.
+    """
+    healthy = True
+
+    data = get_current_state()
+    nodes = data['nodes']
+
+    alert_data = {}
+    counter = 1
+
+    # scan through json for offline nodes
+    for node in nodes:
+        if 'online' not in node['node_status']:
+            print('ALERT!! UNHEALTHY NODE FOUND.')  # XXX: Later remove
+            alert_data[f'Event {counter}'] = node
+            counter += 1
+            healthy = False
+    # scan through json for unhealthy drives
+    for dictobj in data['drives']:
+        for k, v in dictobj.items():
+            if k == 'state':
+                if v != 'healthy':
+                    print('ALERT!! UNHEALTHY DRIVE FOUND.')  # XXX: Later remove
+                    alert_data[f'Event {counter}'] = dictobj
+                    counter += 1
+                    healthy = False
+
+    if healthy:
+        print('No unhealthy changes found.')
+
+    return alert_data, healthy
+
+# XXX: old - remove after testing
 def check_for_unhealthy_objects():
     """ 
     Scan the cluster_state.json file to determine whether or not there are 
@@ -293,9 +346,9 @@ def check_for_unhealthy_objects():
         print('No unhealthy changes found.')
     return alert_data, healthy
 
-#  _____ __  __    _    ___ _     ___ _   _  ____ 
+#  _____ __  __    _    ___ _     ___ _   _  ____
 # | ____|  \/  |  / \  |_ _| |   |_ _| \ | |/ ___|
-# |  _| | |\/| | / _ \  | || |    | ||  \| | |  _ 
+# |  _| | |\/| | / _ \  | || |    | ||  \| | |  _
 # | |___| |  | |/ ___ \ | || |___ | || |\  | |_| |
 # |_____|_|  |_/_/   \_\___|_____|___|_| \_|\____|
                                                 
@@ -363,14 +416,14 @@ def get_email_settings(config_file):
 
     return sender_addr, server_addr, email_recipients
 
-def send_email(config_file, email_alert):
+def alert_send_email(config_file, email_alert):
     """
     Send an email populated with alert information to all email addresses in
     receipients list specified in config.py.
     """
     sender_addr, server_addr, email_recipients = get_email_settings(config_file)
     clustername = config_file['cluster_settings']['cluster_name']
-    subject = f'Event alert for cluster: {clustername}'
+    subject = f'Event alert for Qumulo cluster: {clustername}'
 
     # Compose the email to be sent based off received data.
     mmsg = MIMEText(email_alert, 'html')
@@ -382,14 +435,37 @@ def send_email(config_file, email_alert):
     session.sendmail(sender_addr, email_recipients, mmsg.as_string())
     session.quit()
 
-#  __  __    _    ___ _   _ 
+def api_timeout_send_email():
+    """
+    In the event of API calls failing due to timeout/disconnect, an alert
+    should be sent to notify the admin(s) of the failure.
+    """
+    sender_addr, server_addr, email_recipients = get_email_settings(config_file)
+    clustername = config_file['cluster_settings']['cluster_name']
+    subject = f'Script failure for Qumulo cluster: {clustername}'
+    email_body = """The cluster_event_alerts.py script has encountered an \
+API connection timeout and the script has stopped running. Please check the \
+machine's connection to the cluster over the required port (default 8000)."""
+
+    mmsg = MIMEText(email_body, 'html')
+    mmsg['Subject'] = subject
+    mmsg['From'] = sender_addr 
+    mmsg['To'] = ', '.join(email_recipients)
+
+    session = smtplib.SMTP(server_addr)
+    session.sendmail(sender_addr, email_recipients, mmsg.as_string())
+    session.quit()
+
+#  __  __    _    ___ _   _
 # |  \/  |  / \  |_ _| \ | |
 # | |\/| | / _ \  | ||  \| |
 # | |  | |/ ___ \ | || |\  |
 # |_|  |_/_/   \_\___|_| \_|
 
 def main():
+    # load config, check connectivity, query API & gather data
     config_file = load_config('config.json')
+    # check_cluster_connectivity_with_socket(config_file)
     API_HOSTNAME = config_file['cluster_settings']['cluster_address']
     API_USERNAME = config_file['cluster_settings']['username']
     API_PASSWORD = config_file['cluster_settings']['password']
@@ -411,9 +487,9 @@ def main():
 
     # email alert generation
     if not healthy:
-        print('Cluster event found! Generating email')
+        print('Cluster event found! Generating & sending email')
         email_alert = generate_alert_email(alert_data, rest_client)
-        send_email(config_file, email_alert)
+        alert_send_email(config_file, email_alert)
     else:
         print('New unhealthy objects were NOT found. Closing script') # XXX: Remove l8r
     
