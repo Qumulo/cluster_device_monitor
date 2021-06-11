@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
 
 """
-poll_cluster.py will log into the cluster via the API, and then issue API calls
-to get the status of drives and nodes. The script will parse through the output
-and record only the relevant fields that we care about. 
+cluster_event_alerts.py will log into a Qumulo cluster via the API, and then
+issue API calls to retrieve the status of drives and nodes. The script will
+parse through the cluster response information and determine whether or not
+there are any unhealthy devices, and if so, an email will be sent to all
+addresses defined in the config.json file. 
+
+cluster_event_alerts.py has logic to look for previous iterations of the script
+being ran and will not send email alerts if they were previously generated. The
+script also contains logic to send an email alert if it loses connection with
+the API. 
 """
 
 # TODO: fix docstrings for all functions
 # TODO: adding typing to function defs
+# TODO: New class thing suggestion from alan
+# TODO: Try/except for socket test
+# TODO: Fix iterator loops in generate_alert_email()
 
 # XXX Unused
 # import argparse
@@ -22,8 +32,24 @@ import socket
 import sys
 from email.mime.text import MIMEText
 import qumulo
+from dataclasses import dataclass
 from qumulo.rest_client import RestClient
 from qumulo.lib.request import RequestError
+
+#   ____ _        _    ____ ____  _____ ____
+#  / ___| |      / \  / ___/ ___|| ____/ ___|
+# | |   | |     / _ \ \___ \___ \|  _| \___ \
+# | |___| |___ / ___ \ ___) |__) | |___ ___) |
+#  \____|_____/_/   \_\____/____/|_____|____/
+
+@dataclass                                        
+class EmailMessage:
+    cluster_name = ''
+    subject = None
+    body = None
+    email_recipients = []
+    email_sender = ''
+    email_server_addr = ''
 
 #  _   _ _____ _     ____  _____ ____  ____
 # | | | | ____| |   |  _ \| ____|  _ \/ ___|
@@ -45,16 +71,25 @@ def load_json(file: str):
         file_fh.close()
 
 def check_cluster_connectivity_with_socket(config_file):
-    host_ip = config_file['cluster_settings']['cluster_address']
-    rest_port = config_file['cluster_settings']['rest_port']
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-    result_of_check = sock.connect((host_ip, rest_port))
-
-    if result_of_check != 0:
-        print('ERROR! Unable to communicate with cluster over specified port.')
-        sys.exit(f'Err code: {result_of_check}\nPlease try again. Exiting...')
+    """
+    Use socket to verify communication with cluster IP over port specified
+    in config.json.
+    """
+    try:
+        host_ip = config_file['cluster_settings']['cluster_address']
+        rest_port = config_file['cluster_settings']['rest_port']
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result_of_check = sock.connect((host_ip, rest_port)) # XXX: Remove?
+        sock.close()
+    except ConnectionRefusedError as e:
+        sys.exit(
+            f'ERROR: {e}\nCheck port connectivity & try again. Exiting...')
+        )
+    except socket.timeout as e:
+        sys.exit(f'ERROR: {e}\nCheck connection & try again. Exiting...')
+    # if result_of_check != 0:
+    #     print('ERROR! Unable to communicate with cluster over specified port.')  
+    #     sys.exit(f'Err code: {result_of_check}\nPlease try again. Exiting...')
 
 def load_config(config_file: str):
     """
@@ -105,7 +140,7 @@ def get_cluster_name(rest_client):
         cluster_name = rest_client.cluster.get_cluster_conf()['cluster_name']
         return cluster_name
     except TimeoutError as e:
-        api_timeout_send_email()
+        generate_api_timeout_email()
         sys.exit(f'{e}\nExiting...')
 
 def get_qq_version(rest_client):
@@ -116,7 +151,7 @@ def get_qq_version(rest_client):
         qq_version = rest_client.version.version()['revision_id']
         return qq_version
     except TimeoutError as e:
-        api_timeout_send_email()
+        generate_api_timeout_email()
         sys.exit(f'{e}\nExiting...')
 
 def get_cluster_time(rest_client):
@@ -127,7 +162,7 @@ def get_cluster_time(rest_client):
         cluster_time = rest_client.time_config.get_time_status()['time']
         return cluster_time
     except TimeoutError as e:
-        api_timeout_send_email()
+        generate_api_timeout_email()
         sys.exit(f'{e}\nExiting...')
 
 def get_cluser_uuid(rest_client):
@@ -138,7 +173,7 @@ def get_cluser_uuid(rest_client):
         cluster_uuid = rest_client.node_state.get_node_state()['cluster_id']
         return cluster_uuid
     except TimeoutError as e:
-        api_timeout_send_email()
+        generate_api_timeout_email()
         sys.exit(f'{e}\nExiting...')
 
 def retrieve_status_of_cluster_nodes(rest_client):
@@ -169,7 +204,7 @@ def retrieve_status_of_cluster_nodes(rest_client):
         status_of_nodes['nodes'] = temp_list
         return status_of_nodes
     except TimeoutError as e:
-        api_timeout_send_email()
+        generate_api_timeout_email()
         sys.exit(f'{e}\nExiting...')
 
 def retrieve_status_of_cluster_drives(rest_client):
@@ -203,7 +238,7 @@ def retrieve_status_of_cluster_drives(rest_client):
         status_of_drives['drives'] = temp_list
         return status_of_drives
     except TimeoutError as e:
-        api_timeout_send_email()
+        generate_api_timeout_email()
         sys.exit(f'{e}\nExiting...')
 
 def combine_statuses_formatting(status_of_nodes, status_of_drives):
@@ -247,7 +282,7 @@ def compare_states():
     json files for the previous and current cluster state. Return bool for
     whether or not the data has changed. Return bool for if changes were found.
     """    
-
+    print('Previous state condition has been met! Comparing json files..') # XXX REMOVE AFTER TESTING
     file1 = 'cluster_state.json'
     file2 = 'cluster_state_previous.json'
 
@@ -266,7 +301,7 @@ def compare_states():
 def get_current_state():
     data = {}
 
-    with open('cluster_state.json') as f:
+    with open('cluster_state_unhealthy_devices_TEST.json') as f: # XXX: TESTING - SWAP THIS BACK TO 'cluster_state.json'
         data = json.load(f)
 
     return data
@@ -279,71 +314,29 @@ def check_for_unhealthy_objects():
     the alert. Also return whether or not cluster is healthy as bool.
     """
     healthy = True
-
     data = get_current_state()
     nodes = data['nodes']
-
+    drives = data['drives']
     alert_data = {}
     counter = 1
 
     # scan through json for offline nodes
     for node in nodes:
-        if 'online' not in node['node_status']:
-            print('ALERT!! UNHEALTHY NODE FOUND.')  # XXX: Later remove
+        if node['node_status'] != 'online':
+            print('ALERT!! UNHEALTHY NODE(S) FOUND.')  # XXX: Later remove
             alert_data[f'Event {counter}'] = node
             counter += 1
             healthy = False
     # scan through json for unhealthy drives
-    for dictobj in data['drives']:
-        for k, v in dictobj.items():
-            if k == 'state':
-                if v != 'healthy':
-                    print('ALERT!! UNHEALTHY DRIVE FOUND.')  # XXX: Later remove
-                    alert_data[f'Event {counter}'] = dictobj
-                    counter += 1
-                    healthy = False
-
+    for drive in drives:
+        if drive['state'] != 'healthy':
+            print('ALERT!! UNHEALTHY DRIVE(S) FOUND.')
+            alert_data[f'Event {counter}'] = drive
+            counter += 1
+            healthy = False
     if healthy:
         print('No unhealthy changes found.')
 
-    return alert_data, healthy
-
-# XXX: old - remove after testing
-def check_for_unhealthy_objects():
-    """ 
-    Scan the cluster_state.json file to determine whether or not there are 
-    unhealthy objects. If there are unhealthy objects, append the data to
-    new dict object called alert_data, which will later be used to populate
-    the alert. Also return whether or not cluster is healthy as bool. 
-    """
-    healthy = True
-    alert_data = {}
-    counter = 1
-
-    with open('cluster_state.json') as f:
-        data = json.load(f)
-        
-    # scan through json file for offline nodes
-    for dictobj in data['nodes']:
-        for k,v in dictobj.items():
-            if k == 'node_status':
-                if v != 'online':
-                    print('ALERT!! UNHEALTHY NODE FOUND.') # XXX: Later remove
-                    alert_data[f'Event {counter}'] = dictobj
-                    counter += 1
-                    healthy = False
-    # scan through json file for unhealthy drives
-    for dictobj in data['drives']:
-        for k,v in dictobj.items():
-            if k == 'state':
-                if v != 'healthy':
-                    print('ALERT!! UNHEALTHY DRIVE FOUND.') # XXX: Later remove 
-                    alert_data[f'Event {counter}'] = dictobj
-                    counter += 1
-                    healthy = False
-            
-    if healthy:
-        print('No unhealthy changes found.')
     return alert_data, healthy
 
 #  _____ __  __    _    ___ _     ___ _   _  ____
@@ -367,37 +360,42 @@ def generate_alert_email(alert_data, rest_client):
 
     for objs in alert_data:
         counter += 1
-    email_alert = f"""{alert_header}\nUnhealthy object(s) found. See below for\
- info and engage Qumulo Support in your preferred fashion.\n
-Cluster name: {cluster_name}
-Cluster UUID: {cluster_uuid}
-Approx. time: {cluster_time} UTC\n
-{counter} Event(s) found:\n"""
+
+    email_alert = (
+        f'{alert_header}\nUnhealthy object(s) found. See below for '
+        'info and engage Qumulo Support in your preferred fashion.\n'
+        f'Cluster name: {cluster_name}\n'
+        f'Cluster UUID: {cluster_uuid}\n'
+        f'Approx. time: {cluster_time} UTC\n\n'
+        f'{counter} Event(s) found:\n'
+    )
 
     for item in alert_data:
         for k,v in alert_data[item].items():
-            if k == 'node_status':    # this is a node alert
+            if k == 'node_status': # this is a node alert
                 email_alert += node_event_heading
-                node_alert_text = f"""
-Node number: {alert_data[item]['id']}
-Node status: {alert_data[item]['node_status']}
-Serial Number: {alert_data[item]['serial_number']}
-Node UUID: {alert_data[item]['uuid']}           
-Node Type: {alert_data[item]['model_number']}
-Qumulo Core Version: {qq_version}"""
-                email_alert += node_alert_text + '\n\n'
+                node_alert_text = (
+                    f"\nNode number: {alert_data[item]['id']}\n"
+                    f"Node status: {alert_data[item]['node_status']}\n"
+                    f"Serial Number: {alert_data[item]['serial_number']}\n"
+                    f"Node UUID: {alert_data[item]['uuid']}\n"
+                    f"Node Type: {alert_data[item]['model_number']}\n"
+                    f"Qumulo Core Version: {qq_version}\n"
+                )
+                email_alert += node_alert_text + '\n'
 
-            elif k == 'disk_type':    # this is a drive alert
+            elif k == 'disk_type': # this is a drive alert
                 email_alert += drive_event_heading
-                drive_alert_text = f"""
-Node number: {alert_data[item]['node_id']}
-Drive slot: {alert_data[item]['slot']}
-Drive status: {alert_data[item]['state']}
-Slot type: {alert_data[item]['slot_type']}
-Disk type: {alert_data[item]['disk_type']}
-Disk model: {alert_data[item]['disk_model']}
-Disk serial number: {alert_data[item]['disk_serial_number']}
-Disk capacity: {alert_data[item]['capacity']}"""
+                drive_alert_text = (
+                    f"\nNode number: {alert_data[item]['node_id']}\n"
+                    f"Drive slot: {alert_data[item]['slot']}\n"
+                    f"Drive status: {alert_data[item]['state']}\n"
+                    f"Slot type: {alert_data[item]['slot_type']}\n"
+                    f"Disk type: {alert_data[item]['disk_type']}\n"
+                    f"Disk model: {alert_data[item]['disk_model']}\n"
+                    f"Disk serial number: {alert_data[item]['disk_serial_number']}\n"
+                    f"Disk capacity: {alert_data[item]['capacity']}\n"
+                )
                 email_alert += drive_alert_text + '\n'
     
     email_alert = email_alert.replace('\n', '<br>')
@@ -416,45 +414,56 @@ def get_email_settings(config_file):
 
     return sender_addr, server_addr, email_recipients
 
-def alert_send_email(config_file, email_alert):
+def send_email(email_message):
+    """
+    Send email using objects built from the EmailMessage data class.
+    """
+    e = email_message
+    subject = f'Event alert for Qumulo cluster: {e.cluster_name}'
+
+    # Compose the email to be sent based off received data.
+    mmsg = MIMEText(e.body, 'html')
+    mmsg['Subject'] = e.subject
+    mmsg['From'] = e.email_sender
+    mmsg['To'] = ', '.join(e.email_recipients)
+
+    session = smtplib.SMTP(e.email_server_addr)
+    session.sendmail(e.email_sender, e.email_recipients, mmsg.as_string())
+    session.quit()
+
+def generate_event_alert_email(config_file, email_alert):
     """
     Send an email populated with alert information to all email addresses in
     receipients list specified in config.py.
     """
-    sender_addr, server_addr, email_recipients = get_email_settings(config_file)
-    clustername = config_file['cluster_settings']['cluster_name']
-    subject = f'Event alert for Qumulo cluster: {clustername}'
+    e = EmailMessage()
 
-    # Compose the email to be sent based off received data.
-    mmsg = MIMEText(email_alert, 'html')
-    mmsg['Subject'] = subject
-    mmsg['From'] = sender_addr
-    mmsg['To'] = ', '.join(email_recipients)
+    e.email_sender, e.email_server_addr, e.email_recipients = get_email_settings(config_file)
+    e.cluster_name = config_file['cluster_settings']['cluster_name']
+    e.subject = f'Event alert for Qumulo cluster: {e.cluster_name}'
+    e.body = email_alert
 
-    session = smtplib.SMTP(server_addr)
-    session.sendmail(sender_addr, email_recipients, mmsg.as_string())
-    session.quit()
+    send_email(e)
 
-def api_timeout_send_email():
+def generate_api_timeout_email():
     """
     In the event of API calls failing due to timeout/disconnect, an alert
     should be sent to notify the admin(s) of the failure.
     """
-    sender_addr, server_addr, email_recipients = get_email_settings(config_file)
-    clustername = config_file['cluster_settings']['cluster_name']
-    subject = f'Script failure for Qumulo cluster: {clustername}'
-    email_body = """The cluster_event_alerts.py script has encountered an \
-API connection timeout and the script has stopped running. Please check the \
-machine's connection to the cluster over the required port (default 8000)."""
+    e = EmailMessage()
+    config_file = load_config('config.json')
+    e.email_sender, e.email_server_addr, e.email_recipients = get_email_settings(config_file)
+    e.cluster_name = config_file['cluster_settings']['cluster_name']
+    e.subject = f'Script failure for Qumulo cluster: {e.cluster_name}'
 
-    mmsg = MIMEText(email_body, 'html')
-    mmsg['Subject'] = subject
-    mmsg['From'] = sender_addr 
-    mmsg['To'] = ', '.join(email_recipients)
+    e.body = (
+        'The cluster_event_alerts.py script has encountered an '
+        'API connection timeout and the script has stopped running.\n'
+        'Please check the machine\'s connection to the cluster over '
+        'the required port (default 8000).'
+    )
 
-    session = smtplib.SMTP(server_addr)
-    session.sendmail(sender_addr, email_recipients, mmsg.as_string())
-    session.quit()
+    send_email(e)
 
 #  __  __    _    ___ _   _
 # |  \/  |  / \  |_ _| \ | |
@@ -483,13 +492,14 @@ def main():
         else:
             healthy = True
     else:
+        print('Previous did not exist.. checking for unhealthy objects.') # XXX REMOVE AFTER TESTING
         alert_data, healthy = check_for_unhealthy_objects()
 
     # email alert generation
     if not healthy:
         print('Cluster event found! Generating & sending email')
         email_alert = generate_alert_email(alert_data, rest_client)
-        alert_send_email(config_file, email_alert)
+        generate_event_alert_email(config_file, email_alert)
     else:
         print('New unhealthy objects were NOT found. Closing script') # XXX: Remove l8r
     
