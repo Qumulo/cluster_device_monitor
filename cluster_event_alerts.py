@@ -13,12 +13,10 @@ generated & sent. The script also contains logic to send an email alert if it
 loses connection with the API.
 """
 
-# TODO: fix docstrings for all functions
 # TODO: LINTING
 # TODO: attention to all XXX tags
 
 # TESTING
-# XXX: Test with having a previous file (all healthy) BUT fail a node/drive
 # XXX: Test API timeout functionality
 # XXX: Verify API timeout email formatting looks correct
 # XXX: CHECK FORMATTING WITH: 
@@ -297,6 +295,7 @@ def check_for_previous_state(cluster_status: Dict[str, Any]) -> bool:
     if 'cluster_state.json' in os.listdir():
         os.rename('cluster_state.json','cluster_state_previous.json')
         previous_existed = True
+        print('PREVIOUS RUN FILE "CLUSTER_STATE.JSON" FOUND')           # XXX TESTING
     else:
         previous_existed = False
     with open('cluster_state.json', 'w') as f:
@@ -307,18 +306,20 @@ def check_for_previous_state(cluster_status: Dict[str, Any]) -> bool:
 
 def compare_states() -> bool:
     """
-    """    
-    file1 = 'cluster_state.json'
-    file2 = 'cluster_state_previous.json'
-
     Compare the json files for the previous/current state.
+    """    
+    
+    # file1 = 'cluster_state.json'
+    file1 = 'cluster_state_unhealthy_devices_TEST.json'                        # XXX: TESTING
+    file2 = 'cluster_state_previous.json'
+    # file2 = 'cluster_state_unhealthy_devices_TEST.json'                      # XXX: TESTING
+    
     with open(file1) as f1, open(file2) as f2:
-        data1, data2 = json.load(f1), json.load(f2)
-        
+        data1, data2 = json.load(f1), json.load(f2)        
         if data1 != data2:                                                     # XXX: TESTING
-            print('Changes found!! Scanning for unhealthy objects.')           # XXX: TESTING
+            print('CHANGES FOUND!! Scanning for unhealthy objects.')           # XXX: TESTING
         else:                                                                  # XXX: TESTING
-            print('Changes not found! NOT scanning for unhealthy objects')     # XXX: TESTING
+            print('CHANGES NOT FOUND!! NOT scanning for unhealthy objects')     # XXX: TESTING
         
         return data1 != data2                                                  # XXX: BUMP UP
 
@@ -327,12 +328,14 @@ def check_for_unhealthy_objects() -> Tuple[dict, bool]:
     """
     Parse through cluster_state.json for unhealthy objects.
     """
-    healthy = True
-    with open('cluster_state_unhealthy_devices_TEST.json') as f:
+    
+    # with open('cluster_state.json') as f:
+    with open('cluster_state_unhealthy_devices_TEST.json') as f:                # XXX: TESTING
         data = json.load(f)
     nodes = data['nodes']
     drives = data['drives']
     alert_data = {}
+    healthy = True
     counter = 1
 
     # scan through json for offline nodes
@@ -352,6 +355,7 @@ def check_for_unhealthy_objects() -> Tuple[dict, bool]:
     if healthy:
         print('No unhealthy changes found.')
 
+    print(f'ALERT DATA:\n\n{alert_data}')
     return alert_data, healthy
 
 
@@ -519,7 +523,7 @@ def main():
     if not healthy:
         print(
             'Cluster event found! Generating & sending email'
-            '\nScript continuing to run...'
+            '\nScript running...'
             )
         email_alert = generate_alert_email(alert_data, rest_client)
         generate_event_alert_email(config_file, email_alert)
