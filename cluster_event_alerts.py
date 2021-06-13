@@ -1,25 +1,35 @@
 #!/usr/bin/env python3
 
 """
-cluster_event_alerts.py will log into a Qumulo cluster via the API, and then
-issue API calls to retrieve the status of drives and nodes. The script will
-parse through the cluster response information and determine whether or not
-there are any unhealthy devices, and if so, an email will be sent to all
-addresses defined in the config.json file.
+cluster_event_alerts.py interacts with the Qumulo Rest API to retrieve the
+status of NODES and DRIVES. The cluster 
+response data is recorded into cluster_state.json, which is used to parse 
+through for unhealthy nodes and drives. If unhealthy objects are found, an email will be
+sent to all addresses defined in the config.json file.
 
 cluster_event_alerts.py has logic to look for previous iterations of the script
-being ran and will not send email alerts if they were previously generated. The
-script also contains logic to send an email alert if it loses connection with
-the API.
+being ran and will not send email alerts if the alerts were previously 
+generated & sent. The script also contains logic to send an email alert if it 
+loses connection with the API.
 """
 
 # TODO: fix docstrings for all functions
-# TODO: Fix iterator loops in generate_alert_email()
 # TODO: LINTING
-# TODO: fix variables like email_server_addr vs server_addr... 
-# TODO: Test with having a previous file (all healthy) BUT fail a node/drive
+# TODO: attention to all XXX tags
+
+# TESTING
+# XXX: Test with having a previous file (all healthy) BUT fail a node/drive
+# XXX: Test API timeout functionality
+# XXX: Verify API timeout email formatting looks correct
+# XXX: CHECK FORMATTING WITH: 
+#       - ONLY ONE NODE DOWN
+#       - ONLY ONE DRIVE DOWN
+#       - TWO+ NODES DOWN
+#       - TWO+ DRIVES DOWN
+
 
 # Import Python Libraries
+from time import sleep
 import json
 import os
 import smtplib
@@ -31,7 +41,6 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List, Sequence, Tuple
 
 # import Qumulo REST libraries:
-# import qumulo # XXX: REMOVE?
 from qumulo.rest_client import RestClient
 from qumulo.lib.request import RequestError
 
@@ -40,7 +49,6 @@ from qumulo.lib.request import RequestError
 # | |  _| |  | | | |  _ \ / _ \ | |   \___ \
 # | |_| | |__| |_| | |_) / ___ \| |___ ___) |
 #  \____|_____\___/|____/_/   \_\_____|____/
-
 
 RestInfo = namedtuple('RestInfo', ['conninfo', 'creds'])
 
@@ -51,14 +59,15 @@ RestInfo = namedtuple('RestInfo', ['conninfo', 'creds'])
 # | |___| |___ / ___ \ ___) |__) | |___ ___) |
 #  \____|_____/_/   \_\____/____/|_____|____/
 
+
 @dataclass                                        
 class EmailMessage:
     cluster_name = ''
     subject = None
     body = None
     email_recipients = []
-    email_sender = ''
-    email_server_addr = ''
+    sender = ''
+    server = ''
 
 
 #  _   _ _____ _     ____  _____ ____  ____
@@ -68,25 +77,22 @@ class EmailMessage:
 # |_| |_|_____|_____|_|   |_____|_| \_\____/
 
 
-def load_json(file: str) -> None: 
+def load_json(config_file: str) -> Dict[str, Any]: 
     """
-    Load a file and ensure that it's valid JSON.
+    Load a file as JSON.
     """
     try:
-        file_fh = open(file, 'r')
-        data = json.load(file_fh)
-        data
-        return data
-    except ValueError as error:
-        sys.exit(f'Invalid JSON file: {file}. Error: {error}')
+        fh = open(config_file, 'r')
+        return json.load(fh)
+    except ValueError as e:
+        sys.exit(f'Invalid JSON file: {config_file}. ERROR: {e}')
     finally:
-        file_fh.close()
+        fh.close()
 
 
 def check_cluster_connectivity_with_socket(config_file: str) -> None:
     """
-    Use socket to verify communication with cluster IP over port specified
-    in config.json.
+    Use socket to verify communication with cluster IP.
     """
     try:
         host_ip = config_file['cluster_settings']['cluster_address']
@@ -101,9 +107,9 @@ def check_cluster_connectivity_with_socket(config_file: str) -> None:
         sys.exit(f'ERROR: {e}\nCheck connection & try again. Exiting...')
 
 
-def load_config(config_file: str) -> None:
+def load_config(config_file: str) -> Dict[str, Any]:
     """
-    Load json as json dictionary-like object for parsing.
+    Load json file object for parsing.
     """    
     if os.path.exists(config_file):
         return load_json(config_file)
@@ -127,15 +133,14 @@ def delete_previous_cluster_state_file() -> None:
 #                           |_____|
 
 
-def cluster_login(
-    api_hostname: str,
-    api_username: str,
-    api_password: str
-    ) -> RestInfo:
+def cluster_login(config_file) -> RestInfo:
     """
-    Accept api_hostname, api_username and api_password as parameters. Log into
-    cluster via Qumulo Rest API. Return rest_client for all future API calls.
+    Log into cluster via Qumulo Rest API.
     """
+    api_hostname = config_file['cluster_settings']['cluster_address']
+    api_username = config_file['cluster_settings']['username']
+    api_password = config_file['cluster_settings']['password']
+    
     try:
         rest_client = RestClient(api_hostname, 8000)
         rest_client.login(api_username, api_password)
@@ -145,63 +150,61 @@ def cluster_login(
     except TimeoutError as e:
         sys.exit(f'{e}\nExiting...')
     except RequestError as e:
-        print('Invalid credentials. Please check config file & try again.')
+        print('ERROR: Invalid credentials. Please check config file & try again.')
         sys.exit('Exiting...')
 
 
 def get_cluster_name(rest_client: RestInfo) -> str:
     """
-    Query API for cluster name. Return cluster name as string.
+    API Query: Cluster name
     """
     try:
         cluster_name = rest_client.cluster.get_cluster_conf()['cluster_name']
         return cluster_name
     except TimeoutError as e:
-        generate_api_timeout_email()
+        generate_api_timeout_email(e)
         sys.exit(f'{e}\nExiting...')
 
 
 def get_qq_version(rest_client: RestInfo) -> str:
     """
-    Query API for Qumulo Core version. Return version as string.
+    API Query: Qumulo Core version
     """
     try:
         qq_version = rest_client.version.version()['revision_id']
         return qq_version
     except TimeoutError as e:
-        generate_api_timeout_email()
+        generate_api_timeout_email(e)
         sys.exit(f'{e}\nExiting...')
 
 
 def get_cluster_time(rest_client: RestInfo) -> str:
     """
-    Get current cluster time and return as cluster_time.
+    API Query: Cluster time
     """
     try:
         cluster_time = rest_client.time_config.get_time_status()['time']
         return cluster_time
     except TimeoutError as e:
-        generate_api_timeout_email()
+        generate_api_timeout_email(e)
         sys.exit(f'{e}\nExiting...')
 
 
 def get_cluser_uuid(rest_client: RestInfo) -> str:
     """
-    Query API for cluster UUID number. Return UUID as string.
+    API Query: UUID number
     """
     try:
         cluster_uuid = rest_client.node_state.get_node_state()['cluster_id']
         return cluster_uuid
     except TimeoutError as e:
-        generate_api_timeout_email()
+        generate_api_timeout_email(e)
         sys.exit(f'{e}\nExiting...')
 
 
 def retrieve_status_of_cluster_nodes(rest_client: RestInfo) -> Dict[str, Any]:
     """
-    Accept rest_client object to query via API call to retrieve info/status for
-    nodes. Parse through information and record relevant information. Return
-    dict object to later dump as json.
+    API Query: Node statuses // Data parsing
     """
     node_relevant_fields = [
         'id',
@@ -212,28 +215,28 @@ def retrieve_status_of_cluster_nodes(rest_client: RestInfo) -> Dict[str, Any]:
         'serial_number',
     ]
     temp_list = []
+    new_dict = {} 
     status_of_nodes = {}
 
     try:
-        for num in range(len(rest_client.cluster.list_nodes())):
-            new_dict = {}
-            for k,v in rest_client.cluster.list_nodes()[num].items():
-                if k in node_relevant_fields:
-                    new_dict[k] = v
-            temp_list.append(new_dict)
-        
-        status_of_nodes['nodes'] = temp_list
-        return status_of_nodes
+        cluster_nodes = rest_client.cluster.list_nodes()
     except TimeoutError as e:
-        generate_api_timeout_email()
+        generate_api_timeout_email(e)
         sys.exit(f'{e}\nExiting...')
+
+    for num in range(len(cluster_nodes)):
+        for k,v in cluster_nodes[num].items():
+            if k in node_relevant_fields:
+                new_dict[k] = v
+        temp_list.append(new_dict)
+    status_of_nodes['nodes'] = temp_list
+
+    return status_of_nodes
 
 
 def retrieve_status_of_cluster_drives(rest_client: RestInfo) -> Dict[str, Any]:
     """
-    Accept rest_client object to query via API call to retrieve info/status for
-    drives. Parse through information and record relevant information. Return
-    dict object to later dump as json.
+    API Query: Drive statuses // Data parsing
     """
     drive_relevant_fields = [
         'id',
@@ -247,36 +250,37 @@ def retrieve_status_of_cluster_drives(rest_client: RestInfo) -> Dict[str, Any]:
         'capacity',
     ]
     temp_list = []
+    new_dict = {}
     status_of_drives = {}
 
     try:
-        for num in range(len(rest_client.cluster.get_cluster_slots_status())):
-            new_dict = {}
-            for k,v in rest_client.cluster.get_cluster_slots_status()[num].items():
-                if k in drive_relevant_fields:
-                    new_dict[k] = v
-            temp_list.append(new_dict)
-
-        status_of_drives['drives'] = temp_list
-        return status_of_drives
+        cluster_slots = rest_client.cluster.get_cluster_slots_status()
     except TimeoutError as e:
-        generate_api_timeout_email()
+        generate_api_timeout_email(e)
         sys.exit(f'{e}\nExiting...')
+
+    for num in range(len(cluster_slots)):
+        for k,v in cluster_slots[num].items():
+            if k in drive_relevant_fields:
+                new_dict[k] = v
+        temp_list.append(new_dict)
+    status_of_drives['drives'] = temp_list
+    
+    return status_of_drives
 
 
 def combine_statuses_formatting(
     status_of_nodes: Dict[str, Any],
     status_of_drives: Dict[str, Any]
-    ) -> Dict[str, Any]:
+) -> Dict[str, Any]:
     """
-    In order to adhere to proper json formatting, this func will combine the
-    two status_of_nodes and status_of_drives dictionary objects into one
-    single dictionary object and return this as cluster_status.
+    Combine dictionaries for node & drive status.
     """
     status_of_nodes['drives'] = status_of_drives['drives']    
     cluster_status = status_of_nodes
     
     return cluster_status
+
 
 #  ____  _______     _____ _______        __       ____    _  _____  _
 # |  _ \| ____\ \   / /_ _| ____\ \      / /      |  _ \  / \|_   _|/ \
@@ -285,18 +289,16 @@ def combine_statuses_formatting(
 # |_| \_\_____|  \_/  |___|_____|  \_/\_/____ ____|____/_/   \_\_/_/   \_\
 #                                      |_____|_____|
 
+
 def check_for_previous_state(cluster_status: Dict[str, Any]) -> bool:
     """
-    If cluster_state.json exists, rename it to cluster_state_previous.json.
-    Regardless of this, also create cluster_state.json and write node + drive
-    statuses to file. Return boolean for previous_existed.
+    Current + previous 'cluster_state.json' file handling.
     """
     if 'cluster_state.json' in os.listdir():
         os.rename('cluster_state.json','cluster_state_previous.json')
         previous_existed = True
     else:
         previous_existed = False
-
     with open('cluster_state.json', 'w') as f:
         json.dump(cluster_status, f, indent=4)
 
@@ -305,45 +307,29 @@ def check_for_previous_state(cluster_status: Dict[str, Any]) -> bool:
 
 def compare_states() -> bool:
     """
-    Only being ran if previous_existed is true, this func will compare the
-    json files for the previous and current cluster state. Return bool for
-    whether or not the data has changed. Return bool for if changes were found.
     """    
-    print('Previous state condition has been met! Comparing json files..') # XXX TESTING
     file1 = 'cluster_state.json'
     file2 = 'cluster_state_previous.json'
 
+    Compare the json files for the previous/current state.
     with open(file1) as f1, open(file2) as f2:
         data1, data2 = json.load(f1), json.load(f2)
-        changes = data1 != data2
-
-    # XXX: testing
-    if changes:
-        print('Changes found!! Scanning for unhealthy objects.')
-    else:
-        print('Changes not found! NOT scanning for unhealthy objects')
-
-    return changes
-
-
-def get_current_state() -> Dict[str, Any]:
-    data = {}
-
-    with open('cluster_state_unhealthy_devices_TEST.json') as f: # XXX: TESTING
-        data = json.load(f)
-
-    return data
+        
+        if data1 != data2:                                                     # XXX: TESTING
+            print('Changes found!! Scanning for unhealthy objects.')           # XXX: TESTING
+        else:                                                                  # XXX: TESTING
+            print('Changes not found! NOT scanning for unhealthy objects')     # XXX: TESTING
+        
+        return data1 != data2                                                  # XXX: BUMP UP
 
 
 def check_for_unhealthy_objects() -> Tuple[dict, bool]:
     """
-    Scan the cluster_state.json file to determine whether or not there are
-    unhealthy objects. If there are unhealthy objects, append the data to
-    new dict object called alert_data, which will later be used to populate
-    the alert. Also return whether or not cluster is healthy as bool.
+    Parse through cluster_state.json for unhealthy objects.
     """
     healthy = True
-    data = get_current_state()
+    with open('cluster_state_unhealthy_devices_TEST.json') as f:
+        data = json.load(f)
     nodes = data['nodes']
     drives = data['drives']
     alert_data = {}
@@ -352,7 +338,7 @@ def check_for_unhealthy_objects() -> Tuple[dict, bool]:
     # scan through json for offline nodes
     for node in nodes:
         if node['node_status'] != 'online':
-            print('ALERT!! UNHEALTHY NODE(S) FOUND.') # XXX: TESTING
+            print('ALERT!! UNHEALTHY NODE(S) FOUND.')
             alert_data[f'Event {counter}'] = node
             counter += 1
             healthy = False
@@ -376,34 +362,33 @@ def check_for_unhealthy_objects() -> Tuple[dict, bool]:
 # |_____|_|  |_/_/   \_\___|_____|___|_| \_|\____|
 
 
-def generate_alert_email(alert_data: Dict[str, Any], rest_client) -> str:
+def generate_alert_email(
+        alert_data: Dict[str, Any],
+        rest_client: RestInfo
+) -> str:
     """
-    Generate email alert and return as string
+    Generate email body for alert information.
     """
     qq_version = get_qq_version(rest_client)
     cluster_name = get_cluster_name(rest_client)
     cluster_uuid = get_cluser_uuid(rest_client)
     cluster_time = get_cluster_time(rest_client)
-    counter = 0
-    alert_header = '=' * 19 + ' CLUSTER EVENT ALERT! ' + '=' * 19
-    node_event_heading = '=' * 23 + ' NODE OFFLINE ' + '=' * 23
-    drive_event_heading = '=' * 21 + ' DRIVE UNHEALTHY ' + '=' * 22
 
-    for objs in alert_data:
-        counter += 1
-
+    alert_header = '<b>=' * 19 + ' CLUSTER EVENT ALERT! ' + '</b>=' * 19
+    node_event_heading = '<b>=' * 23 + ' NODE OFFLINE ' + '</b>=' * 23
+    drive_event_heading = '<b>=' * 21 + ' DRIVE UNHEALTHY ' + '</b>=' * 21 
     email_alert = (
         f'{alert_header}\nUnhealthy object(s) found. See below for '
         'info and engage Qumulo Support in your preferred fashion.\n'
         f'Cluster name: {cluster_name}\n'
         f'Cluster UUID: {cluster_uuid}\n'
         f'Approx. time: {cluster_time} UTC\n\n'
-        f'{counter} Event(s) found:\n'
+        f'<i>{len(alert_data)} Event(s) found:</i>\n'
     )
 
     for item in alert_data:
         for k,v in alert_data[item].items():
-            if k == 'node_status': # this is a node alert
+            if k == 'node_status': # node alert
                 email_alert += node_event_heading
                 node_alert_text = (
                     f"\nNode Number: {alert_data[item]['id']}\n"
@@ -414,8 +399,7 @@ def generate_alert_email(alert_data: Dict[str, Any], rest_client) -> str:
                     f"Qumulo Core Version: {qq_version}\n"
                 )
                 email_alert += node_alert_text + '\n'
-
-            elif k == 'disk_type': # this is a drive alert
+            elif k == 'disk_type': # drive alert
                 email_alert += drive_event_heading
                 drive_alert_text = (
                     f"\nNode Number: {alert_data[item]['node_id']}\n"
@@ -426,6 +410,7 @@ def generate_alert_email(alert_data: Dict[str, Any], rest_client) -> str:
                     f"Disk Model: {alert_data[item]['disk_model']}\n"
                     f"Disk S/N: {alert_data[item]['disk_serial_number']}\n"
                     f"Disk Capacity: {alert_data[item]['capacity']}\n"
+                    f"Qumulo Core Version: {qq_version}\n"
                 )
                 email_alert += drive_alert_text + '\n'
     
@@ -435,67 +420,66 @@ def generate_alert_email(alert_data: Dict[str, Any], rest_client) -> str:
 
 def get_email_settings(config_file: str) -> Tuple[str, str, list]:
     """
-    Pull various email settings from config file.
+    Pull email settings from config file.
     """
     email_recipients = []
-    sender_addr = config_file['email_settings']['sender_address']
-    server_addr = config_file['email_settings']['server_address']
+    sender = config_file['email_settings']['sender']
+    server = config_file['email_settings']['server']
 
     for email_addr in config_file['email_settings']['mail_to']:
         email_recipients.append(email_addr)
 
-    return sender_addr, server_addr, email_recipients
+    return sender, server, email_recipients
 
 
-def send_email(email_message: str):
+def send_email(email_message: str) -> None:
     """
-    Send email using objects built from the EmailMessage data class.
+    Send email via SMTP.
     """
     e = email_message
-    subject = f'Event alert for Qumulo cluster: {e.cluster_name}'
     mmsg = MIMEText(e.body, 'html')
     mmsg['Subject'] = e.subject
-    mmsg['From'] = e.email_sender
+    mmsg['From'] = e.sender
     mmsg['To'] = ', '.join(e.email_recipients)
 
-    session = smtplib.SMTP(e.email_server_addr)
-    session.sendmail(e.email_sender, e.email_recipients, mmsg.as_string())
+    session = smtplib.SMTP(e.server)
+    session.sendmail(e.sender, e.email_recipients, mmsg.as_string())
     session.quit()
 
 
-def generate_event_alert_email(config_file: str, email_alert: str):
+def generate_event_alert_email(config_file: str, email_alert: str) -> None:
     """
-    Send an email populated with alert information to all email addresses in
-    receipients list specified in config.py.
+    Build and send event alert email.
     """
     e = EmailMessage()
-    (
-        e.email_sender, e.email_server_addr, e.email_recipients
-    ) = get_email_settings(config_file)
     e.cluster_name = config_file['cluster_settings']['cluster_name']
     e.subject = f'Event alert for Qumulo cluster: {e.cluster_name}'
     e.body = email_alert
+    (
+        e.sender, e.server, e.email_recipients
+    ) = get_email_settings(config_file)
+
     send_email(e)
 
 
-def generate_api_timeout_email():
+def generate_api_timeout_email(error: str) -> None:
     """
-    In the event of API calls failing due to timeout/disconnect, an alert
-    should be sent to notify the admin(s) of the failure.
+    Build and send API timeout alert email.
     """
-    e = EmailMessage()
     config_file = load_config('config.json')
-    (
-        e.email_sender, e.email_server_addr, e.email_recipients
-    ) = get_email_settings(config_file)
+    
+    e = EmailMessage()
     e.cluster_name = config_file['cluster_settings']['cluster_name']
     e.subject = f'Script failure for Qumulo cluster: {e.cluster_name}'
-
+    (
+        e.sender, e.server, e.email_recipients
+    ) = get_email_settings(config_file)
     e.body = (
         'The cluster_event_alerts.py script has encountered an '
         'API connection timeout and the script has stopped running.\n'
         'Please check the machine\'s connection to the cluster over '
         'the required port (default 8000).'
+        f'\nError message: {error}'
     )
 
     send_email(e)
@@ -508,14 +492,11 @@ def generate_api_timeout_email():
 # |_|  |_/_/   \_\___|_| \_|
 
 
-def main():
+def main():  
     # load config, check connectivity, query API & gather data
     config_file = load_config('config.json')
     check_cluster_connectivity_with_socket(config_file)
-    API_HOSTNAME = config_file['cluster_settings']['cluster_address']
-    API_USERNAME = config_file['cluster_settings']['username']
-    API_PASSWORD = config_file['cluster_settings']['password']
-    rest_client = cluster_login(API_HOSTNAME, API_USERNAME, API_PASSWORD)
+    rest_client = cluster_login(config_file)
     status_of_nodes = retrieve_status_of_cluster_nodes(rest_client)
     status_of_drives = retrieve_status_of_cluster_drives(rest_client)
     cluster_status = combine_statuses_formatting(
@@ -523,7 +504,6 @@ def main():
         status_of_drives
         )
     previous_existed = check_for_previous_state(cluster_status)
-
     # previous state logic handling
     if previous_existed:
         changes = compare_states()
@@ -537,7 +517,10 @@ def main():
 
     # email alert generation
     if not healthy:
-        print('Cluster event found! Generating & sending email')
+        print(
+            'Cluster event found! Generating & sending email'
+            '\nScript continuing to run...'
+            )
         email_alert = generate_alert_email(alert_data, rest_client)
         generate_event_alert_email(config_file, email_alert)
     else:
