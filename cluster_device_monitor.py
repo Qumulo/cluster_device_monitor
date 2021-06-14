@@ -424,6 +424,7 @@ def send_email(email_message: str) -> None:
     session.sendmail(eml.sender, eml.email_recipients, mmsg.as_string())
     session.quit()
 
+
 def generate_event_alert_email(config_file: str, email_alert: str) -> None:
     """
     Build and send event alert email.
@@ -441,6 +442,7 @@ def generate_event_alert_email(config_file: str, email_alert: str) -> None:
         send_email(eml)
     except socket.gaierror as err:
         sys.exit(f'ERROR: {err}\nCheck connection to SMTP server. Exiting...')
+
 
 def generate_api_timeout_email(error: str) -> None:
     """
@@ -466,6 +468,7 @@ def generate_api_timeout_email(error: str) -> None:
         send_email(eml)
     except socket.gaierror as err:
         sys.exit(f'ERROR: {err}\nCheck connection to SMTP server. Exiting...')
+
 
 #  __  __    _    ___ _   _
 # |  \/  |  / \  |_ _| \ | |
