@@ -6,6 +6,7 @@
   * [Introduction](#introduction)
   * [Installation](#installation)
   * [Configuration](#configuration)
+  * [Permissions](#permissions)
   * [Examples](#examples)
   * [Notes](#notes)
 
@@ -18,7 +19,7 @@ This script generates email alerts for a Qumulo cluster using the REST API when 
 
 The Qumulo API tools are required to make the script work and and they are available for download from your Qumulo cluster. For more information, please check out the [Qumulo GitHub](https://qumulo.github.io/) page for more information on the API.
 
-The script contains logic to look for a previously ran iteration and NOT generate email alerts if the necessary alerts were already generated. If unhealthy change arises the script will detect this and generate an email alert.
+The script contains logic to look for a previously ran iteration and NOT generate email alerts if the necessary alerts were already generated. If unhealthy changes arise the script will detect this and generate a new email alert.
 
 If any of the alert conditions are triggered, a single email will be sent to all of the configured recipients.
 
@@ -43,13 +44,14 @@ To install and use this script:
   3. Use `example_config.json` as a guide to creating a `config.json` with your alerting rules.
   4. Invoke the script by running `python ./cluster_device_monitor.py` from the cloned directory.
 
+
 ## Configuration
 At this point, it is expected that you have a functional Qumulo cluster, the API Tools installed on your machine and the `cluster_device_monitor.py` script downloaded. If this is done, you can create a `config.json` configuration file to suit your needs. The general steps are:
 
   1. Use `example_config.json` as a guide to creating a `config.json` with your alerting rules. The fields for this file are described after this section.
   2. Set up a `cron` job to run as often as you like to check for alerts. See [CronHowto](https://help.ubuntu.com/community/CronHowto) if you have any questions. Example command `./cluster_device_monitor.py --config /root/config.json`
 
-The `config.json` file contains 6 stanzas and each can have multiple objects. These stanzas are groups objects of `rules` and are individually interpreted by the script. The stanzas are:
+The `config.json` file contains 2 stanzas and each can have multiple objects. These stanzas are groups objects of `rules` and are individually interpreted by the script. The stanzas are:
 
   1. Cluster Settings
      - `cluster_address` - FQDN or IP address of a cluster node.
@@ -63,9 +65,11 @@ The `config.json` file contains 6 stanzas and each can have multiple objects. Th
      - `server` - The email server or SMTP relay that will route the emails sent by the script.
      - `mail_to` - A list of email addresses that the alerts will be sent to
 
+
 ## Permissions
 This script needs file system permissions to run. 
     - Use `chmod 777 cluster_device_monitor.py` to grant full permissions to the script file
+
 
 ## FAQ
 
@@ -116,7 +120,6 @@ Disk Model: Virtual_disk
 Disk S/N:
 Disk Capacity: 10467934208
 ```
-
 
 
 ## Notes
