@@ -489,7 +489,7 @@ def main():
     cluster_status = combine_statuses_formatting(
         status_of_nodes,
         status_of_drives
-        )
+    )
 
     # previous state logic handling
     previous_existed = check_for_previous_state(cluster_status)
