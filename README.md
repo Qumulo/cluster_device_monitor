@@ -2,15 +2,16 @@
 
 ## Table of contents
 
-  * [Updates](#updates)
+  * [ChangeLog](#changelog)
   * [Introduction](#introduction)
   * [Installation](#installation)
+  * [Requirements](#requirements)
   * [Configuration](#configuration)
   * [Permissions](#permissions)
   * [Examples](#examples)
   * [Notes](#notes)
 
-## Updates
+## ChangeLog
 
 *  Updates Pending...
 
@@ -27,7 +28,9 @@ The suggested method to run this script is via a `cron` job which periodically e
 
 Lastly, all email alerts include a time stamp indicating when the alert was sent.
 
-## Installation
+
+## Requirements
+
 The script has the following requirements:
 
   * A Linux machine, preferably Ubuntu 16.04 or newer.
@@ -35,6 +38,8 @@ The script has the following requirements:
   * Qumulo API SDK 3.1.1 or newer installed for Python3. (aka. API Tools)
   * An SMTP server running on port TCP 25. (TLS not available.)
 
+
+## Installation
 To install and use this script:
 
   1. Use `pip` to install the Qumulo Python API tools: `pip3 install qumulo-api`.
@@ -78,6 +83,14 @@ This script needs file system permissions to run.
   2. Will the same alert be sent for an unhealthy device if it was already sent?
      - No, the script has logic to review the previous run of the script and will not generate a new email unless a new (unhealthy) change occurs.
 
+### Notes
+The script has some limitations or caveats; they are:
+  * Email server or relay must speak SMTP over port TCP 25.
+  * Script must be run to alert; the recommended method is a `cron` job that runs as often as desired.
+  * It will send one email alert per JSON object in the configuration file.
+  * If you would like to test this on a local email server, please see [Test Email Server](#test-email-server)
+
+
 
 ## Examples
 An example configuration is uploaded to this GitHub for ease of use, `example_config.json`. Use this as a template to build your own rule set. The email alerts will be similar to these:
@@ -120,14 +133,6 @@ Disk Model: Virtual_disk
 Disk S/N:
 Disk Capacity: 10467934208
 ```
-
-
-## Notes
-The script has some limitations or caveats; they are:
-  * Email server or relay must speak SMTP over port TCP 25.
-  * Script must be run to alert; the recommended method is a `cron` job that runs as often as desired.
-  * It will send one email alert per JSON object in the configuration file.
-  * If you would like to test this on a local email server, please see [Test Email Server](#test-email-server)
 
 
 ## Test Email Server

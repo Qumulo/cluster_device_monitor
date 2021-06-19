@@ -25,8 +25,8 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, Tuple
 
 # import Qumulo REST libraries:
-from qumulo.rest_client import RestClient
 from qumulo.lib.request import RequestError
+from qumulo.rest_client import RestClient
 
 #   ____ _     ___  ____    _    _     ____
 #  / ___| |   / _ \| __ )  / \  | |   / ___|
@@ -352,7 +352,7 @@ def populate_alert_email_body(
     cluster_uuid = get_cluser_uuid(rest_client)
     cluster_time = get_cluster_time(rest_client)
 
-    alert_header = '=' * 19 + '<b> CLUSTER EVENT ALERT! </b>' + '</b>=' * 19
+    alert_header = '=' * 19 + '<b> CLUSTER EVENT ALERT! </b>' + '=' * 19
     node_event_heading = '=' * 23 + '<b> NODE OFFLINE </b>' + '=' * 23
     drive_event_heading = '=' * 21 + '<b> DRIVE UNHEALTHY </b>' + '=' * 21
     email_alert = (
