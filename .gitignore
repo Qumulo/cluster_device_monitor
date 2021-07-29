@@ -10,5 +10,6 @@ app/cluster_state*.json
 cluster_state*.json
 *ipynb
 config.json
-cluster_device_monitor_test.py
 .pylintrc
+old
+*pycache*

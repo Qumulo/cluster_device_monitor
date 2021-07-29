@@ -73,7 +73,7 @@ The `config.json` file contains 2 stanzas and each can have multiple objects. Th
 
 ## Permissions
 This script needs file system permissions to run. 
-    - Use `chmod 777 cluster_device_monitor.py` to grant full permissions to the script file
+    - Use `chmod 755 cluster_device_monitor.py` to grant full permissions to the script file
 
 
 ## FAQ
@@ -102,14 +102,13 @@ An example configuration is uploaded to this GitHub for ease of use, `example_co
 Unhealthy object(s) found. See below for info and engage Qumulo Support in your preferred fashion.
 Cluster name: CoffeeTime
 Cluster UUID: cf83e828-7ef7-4368-a75b-3b972d10f2c6
-Approx. time: 2021-06-14T16:52:03.762556351Z UTC
+Approx. time: 2021-07-29T14:46:28.730935608Z UTC
 
 1 Event(s) found:
 ======================= NODE OFFLINE =======================
 Node Number: 2
 Node Status: offline
 Node S/N:
-Node UUID: cbdea0e3-1659-48af-b15b-e97dbbeefd04
 Node Type: QVIRT
 Qumulo Core Version: Qumulo Core 4.0.1
 ```
@@ -120,15 +119,15 @@ Qumulo Core Version: Qumulo Core 4.0.1
 Unhealthy object(s) found. See below for info and engage Qumulo Support in your preferred fashion.
 Cluster name: CoffeeTime
 Cluster UUID: cf83e828-7ef7-4368-a75b-3b972d10f2c6
-Approx. time: 2021-06-14T17:55:39.744139187Z UTC
+Approx. time: 2021-07-29T21:01:36.531469908Z UTC
 
 1 Event(s) found:
 ===================== DRIVE UNHEALTHY =====================
-Node Number: 3
-Drive Slot: 1
-Drive Status: unhealthy
-Slot Type: SSD
-Disk Type: SSD
+Node Number: 1
+Drive ID: 1.4
+Drive Slot: 4
+Drive Status: dead
+Disk Type: HDD
 Disk Model: Virtual_disk
 Disk S/N:
 Disk Capacity: 10467934208
