@@ -13,6 +13,7 @@
 
 ## ChangeLog
 
+* 07/30/21: V2.0 - Completely refactored with unit testing integration.
 *  06/15/21: V1.0 - Functional and completed, for now!
 
 ## Introduction
