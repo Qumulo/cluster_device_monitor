@@ -197,7 +197,7 @@ def qq_api_query(
     rest_client: RestClient, config_data: 'ConfigData', api_call: str
 ) -> Optional[str]:
     """
-    Query Qumulo via QQ API for cluster information based on api_call.
+    Query Qumulo via Qumulo REST API for cluster information based on api_call.
     """
     response = None
 
