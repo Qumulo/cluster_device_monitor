@@ -305,8 +305,8 @@ def populate_alert_email_body(
         'info and engage Qumulo Support in your preferred fashion.\n'
         f'Cluster name: {cluster_name}\n'
         f'Cluster UUID: {cluster_uuid}\n'
-        f'Approx. time: {cluster_time} UTC\n\n'
-        f'Qumulo Core Version: {qq_version}\n'
+        f'Approx. time: {cluster_time} UTC\n'
+        f'Qumulo Core Version: {qq_version}\n\n'
         f'<i>{len(alert_data)} Event(s) found:</i>\n'
     )
 

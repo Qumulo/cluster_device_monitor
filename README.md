@@ -103,6 +103,7 @@ Unhealthy object(s) found. See below for info and engage Qumulo Support in your 
 Cluster name: CoffeeTime
 Cluster UUID: cf83e828-7ef7-4368-a75b-3b972d10f2c6
 Approx. time: 2021-07-29T14:46:28.730935608Z UTC
+Qumulo Core Version: Qumulo Core 4.0.1
 
 1 Event(s) found:
 ======================= NODE OFFLINE =======================
@@ -110,7 +111,6 @@ Node Number: 2
 Node Status: offline
 Node S/N:
 Node Type: QVIRT
-Qumulo Core Version: Qumulo Core 4.0.1
 ```
 
 ### Unhealthy Drive Alert
@@ -120,6 +120,7 @@ Unhealthy object(s) found. See below for info and engage Qumulo Support in your 
 Cluster name: CoffeeTime
 Cluster UUID: cf83e828-7ef7-4368-a75b-3b972d10f2c6
 Approx. time: 2021-07-29T21:01:36.531469908Z UTC
+Qumulo Core Version: Qumulo Core 4.0.1
 
 1 Event(s) found:
 ===================== DRIVE UNHEALTHY =====================
