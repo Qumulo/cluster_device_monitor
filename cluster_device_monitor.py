@@ -306,6 +306,7 @@ def populate_alert_email_body(
         f'Cluster name: {cluster_name}\n'
         f'Cluster UUID: {cluster_uuid}\n'
         f'Approx. time: {cluster_time} UTC\n\n'
+        f'Qumulo Core Version: {qq_version}\n'
         f'<i>{len(alert_data)} Event(s) found:</i>\n'
     )
 
@@ -318,7 +319,6 @@ def populate_alert_email_body(
                     f"Node Status: {alert_data[entry]['node_status']}\n"
                     f"Node S/N: {alert_data[entry]['serial_number']}\n"
                     f"Node Type: {alert_data[entry]['model_number']}\n"
-                    f'Qumulo Core Version: {qq_version}\n'
                 )
                 email_alert += node_alert_text + '\n'
             elif key == 'disk_type':  # drive alert
@@ -332,7 +332,6 @@ def populate_alert_email_body(
                     f"Disk Model: {alert_data[entry]['disk_model']}\n"
                     f"Disk S/N: {alert_data[entry]['disk_serial_number']}\n"
                     f"Disk Capacity: {alert_data[entry]['capacity']}\n"
-                    f'Qumulo Core Version: {qq_version}\n'
                 )
                 email_alert += drive_alert_text + '\n'
 
