@@ -11,7 +11,7 @@ cluster_device_monitor.py interacts with the Qumulo Rest API to retrieve the
 status of NODES and DRIVES. The cluster response data is recorded into
 cluster_status.json, which is used to parse through for unhealthy nodes and
 drives. If unhealthy objects are found, an email will be sent to all addresses
-defined in the config.json file.
+defined in the 'mail_to' key of the config.json file.
 
 cluster_device_monitor.py has logic to look for previous iterations of the
 script being ran and will not send email alerts if the alerts were previously
