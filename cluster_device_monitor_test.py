@@ -6,6 +6,11 @@
 # information or intellectual property contained herein is strictly forbidden,
 # unless separate prior written permission has been obtained from Qumulo, Inc.
 
+# TODO list....
+# TODO: fix test for socket.timeout exception
+# TODO: add tests for new QQ API exceptions changed in main'
+# TODO: test credential failure
+# TODO: add tests for EmailMessage.send()
 
 import os
 import unittest

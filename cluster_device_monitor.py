@@ -31,6 +31,7 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from qumulo.rest_client import RestClient
+from qumulo.lib.request import RequestError
 
 #   ____ _        _    ____ ____  _____ ____
 #  / ___| |      / \  / ___/ ___|| ____/ ___|
@@ -77,19 +78,32 @@ class EmailMessage:
     """
     Data for email message.
     """
-    config: 'ConfigData'
+    config: ConfigData
     subject: str
     body: str
 
     def __init__(
         self,
-        config: 'ConfigData',
+        config: ConfigData,
         subject: str,
         body: str
     ):
         self.config = config
         self.subject = subject
         self.body = body
+
+    def send(self) -> None:
+        """
+        Send email via SMTP.
+        """
+        mmsg = MIMEText(self.body, 'html')
+        mmsg['Subject'] = self.subject
+        mmsg['From'] = self.config.sender
+        mmsg['To'] = ', '.join(self.config.mail_to)
+        session = smtplib.SMTP(self.config.server)
+
+        session.sendmail(self.config.sender, self.config.mail_to, mmsg.as_string())
+        session.quit()
 
 
 #  _   _ _____ _     ____  _____ ____  ____
@@ -99,7 +113,7 @@ class EmailMessage:
 # |_| |_|_____|_____|_|   |_____|_| \_\____/
 
 
-def parse_config(config_file: Dict[str, Any]) -> 'ConfigData':
+def parse_config(config_file: Dict[str, Any]) -> ConfigData:
     """
     Extract values from the config file.
     """
@@ -139,7 +153,7 @@ def load_json(config_path: str) -> Dict[str, Any]:
         sys.exit(f'ERROR: {err}\nInvalid JSON file: {config_path}. Exiting...')
 
 
-def load_and_parse_config(config_path: str) -> 'ConfigData':
+def load_and_parse_config(config_path: str) -> ConfigData:
     """
     Load config JSON file and record information.
     """
@@ -150,7 +164,7 @@ def load_and_parse_config(config_path: str) -> 'ConfigData':
         sys.exit(f'ERROR: {err}\nUnable to load or parse config. Exiting...')
 
 
-def check_cluster_connectivity(config_data: 'ConfigData') -> None:
+def check_cluster_connectivity(config_data: ConfigData) -> None:
     """
     Verify that we can communicate to the cluster over the REST port.
     """
@@ -159,8 +173,12 @@ def check_cluster_connectivity(config_data: 'ConfigData') -> None:
         sock.connect((config_data.cluster_address, config_data.rest_port))
         sock.shutdown(socket.SHUT_WR)
         sock.close()
-    except Exception as err:
-        generate_cluster_timeout_email(str(err), config_data)
+    except ConnectionRefusedError as err:
+        sys.exit(f'ERROR:{err}\nCheck port connectivity & try again. Exiting...')
+    except TimeoutError as err:
+        sys.exit(f'ERROR: {err}\nCheck connection & try again. Exiting...')
+    except socket.timeout as err:
+        sys.exit(f'ERROR: {err}\nCheck connection & try again. Exiting...')
 
 
 def delete_previous_cluster_status() -> None:
@@ -179,7 +197,7 @@ def delete_previous_cluster_status() -> None:
 #
 
 
-def cluster_login(config_data: 'ConfigData') -> Optional[RestClient]:
+def cluster_login(config_data: ConfigData) -> Optional[RestClient]:
     """
     Log into cluster via Qumulo Rest API.
     """
@@ -187,14 +205,17 @@ def cluster_login(config_data: 'ConfigData') -> Optional[RestClient]:
     try:
         rest_client = RestClient(config_data.cluster_address, config_data.rest_port)
         rest_client.login(config_data.username, config_data.password)
-    except Exception as err:
+    except TimeoutError as err:
+        generate_cluster_timeout_email(str(err), config_data)
+    except RequestError as err:
+        print('ERROR: Invalid credentials. Please check config file & try again.')
         generate_cluster_timeout_email(str(err), config_data)
 
     return rest_client
 
 
 def qq_api_query(
-    rest_client: RestClient, config_data: 'ConfigData', api_call: str
+    rest_client: RestClient, config_data: ConfigData, api_call: str
 ) -> Optional[str]:
     """
     Query Qumulo via Qumulo REST API for cluster information based on api_call.
@@ -210,17 +231,17 @@ def qq_api_query(
             response = rest_client.time_config.get_time_status()['time']
         elif api_call == 'cluster_uuid':
             response = rest_client.node_state.get_node_state()['cluster_id']
-    except Exception as err:
+    except TimeoutError as err:
         generate_cluster_timeout_email(str(err), config_data)
 
     return response
 
 
 def retrieve_status_of_cluster_devices(
-    rest_client: RestClient, config_data: 'ConfigData', device_type: str
+    rest_client: RestClient, config_data: ConfigData, device_type: str
 ) -> Dict[str, Any]:
     """
-    API Query: Retrieve statuses of specified cluster devices // Data parsing
+    API Query: Retrieve statuses of specified cluster devices
     """
     status_of_devices = {}
 
@@ -229,7 +250,7 @@ def retrieve_status_of_cluster_devices(
             status_of_devices['nodes'] = rest_client.cluster.list_nodes()
         elif device_type == 'drives':
             status_of_devices['drives'] = rest_client.cluster.get_cluster_slots_status()
-    except Exception as err:
+    except TimeoutError as err:
         generate_cluster_timeout_email(str(err), config_data)
 
     return status_of_devices
@@ -247,9 +268,12 @@ def preserve_cluster_status(cluster_status: Dict[str, Any]) -> None:
     """
     Preserve the previous cluster status if it exists, and create new cluster status JSON file.
     """
-    if 'cluster_status.json' in os.listdir():
-        os.rename('cluster_status.json', 'cluster_status_previous.json')
-    with open('cluster_status.json', 'w') as file:
+    cluster_status_json = 'cluster_status.json'
+    cluster_status_previous_json = 'cluster_status_previous.json'
+
+    if cluster_status in os.listdir():
+        os.rename(cluster_status_json, cluster_status_previous_json)
+    with open(cluster_status_json, 'w') as file:
         json.dump(cluster_status, file, indent=4)
 
 
@@ -287,7 +311,7 @@ def check_for_unhealthy_objects(cluster_status: Dict[str, Any]) -> Tuple[dict, b
 
 
 def populate_alert_email_body(
-    alert_data: Dict[str, Any], rest_client: RestClient, config_data: 'ConfigData'
+    alert_data: Dict[str, Any], rest_client: RestClient, config_data: ConfigData
 ) -> str:
     """
     Generate email body for alert information.
@@ -339,21 +363,7 @@ def populate_alert_email_body(
     return email_alert
 
 
-def send_email(eml: 'EmailMessage') -> None:
-    """
-    Send email via SMTP.
-    """
-    mmsg = MIMEText(eml.body, 'html')
-    mmsg['Subject'] = eml.subject
-    mmsg['From'] = eml.config.sender
-    mmsg['To'] = ', '.join(eml.config.mail_to)
-    session = smtplib.SMTP(eml.config.server)
-
-    session.sendmail(eml.config.sender, eml.config.mail_to, mmsg.as_string())
-    session.quit()
-
-
-def generate_event_alert_email(config_data: 'ConfigData', email_alert: str) -> None:
+def generate_event_alert_email(config_data: ConfigData, email_alert: str) -> None:
     """
     Build and send event alert email.
     """
@@ -364,20 +374,20 @@ def generate_event_alert_email(config_data: 'ConfigData', email_alert: str) -> N
     print('ALERT!! Unhealthy device event(s) found!')
 
     try:
-        send_email(eml)
+        eml.send()
         print('EMAIL SENT.')
     except Exception as err:
         sys.exit(f'ERROR: {err}\nCheck connection to SMTP server. Exiting...')
 
 
-def generate_cluster_timeout_email(error: str, config_data: 'ConfigData') -> None:
+def generate_cluster_timeout_email(error: str, config_data: ConfigData) -> None:
     """
     Build and send cluster connection timeout alert email.
     """
     subject = f'Script failure for Qumulo cluster: {config_data.cluster_name}'
     body = (
         'The cluster_device_monitor.py script has encountered a '
-        'connection timeout and the script has stopped running.<br>'
+        'failure and the script has stopped running.<br>'
         "Please check the machine's connection to the cluster over "
         'the required port (default 8000).<br>'
         f'config_data.json - cluster IP: {config_data.cluster_address}<br>'
@@ -386,11 +396,11 @@ def generate_cluster_timeout_email(error: str, config_data: 'ConfigData') -> Non
     )
     eml = EmailMessage(config_data, subject, body)
 
-    print('ALERT!! Connection to cluster timed out!')
+    print('ALERT!! Script encountered a failure. See below for details.')
 
     try:
-        send_email(eml)
-        sys.exit(f'EMAIL SENT.\nERROR: {error}. Exiting...')
+        eml.send()
+        sys.exit(f'EMAIL SENT.\n\nError Details: {error}. \nExiting...')
     except Exception as err:
         sys.exit(
             f'ERROR: {err}\nUnable to send email. Check connection to SMTP server. Exiting...'
