@@ -206,10 +206,10 @@ def cluster_login(config_data: ConfigData) -> Optional[RestClient]:
         rest_client = RestClient(config_data.cluster_address, config_data.rest_port)
         rest_client.login(config_data.username, config_data.password)
     except TimeoutError as err:
-        generate_cluster_timeout_email(str(err), config_data)
+        generate_scrit_problem_email(str(err), config_data)
     except RequestError as err:
         print('ERROR: Invalid credentials. Please check config file & try again.')
-        generate_cluster_timeout_email(str(err), config_data)
+        generate_scrit_problem_email(str(err), config_data)
 
     return rest_client
 
@@ -232,7 +232,7 @@ def qq_api_query(
         elif api_call == 'cluster_uuid':
             response = rest_client.node_state.get_node_state()['cluster_id']
     except TimeoutError as err:
-        generate_cluster_timeout_email(str(err), config_data)
+        generate_scrit_problem_email(str(err), config_data)
 
     return response
 
@@ -251,7 +251,7 @@ def retrieve_status_of_cluster_devices(
         elif device_type == 'drives':
             status_of_devices['drives'] = rest_client.cluster.get_cluster_slots_status()
     except TimeoutError as err:
-        generate_cluster_timeout_email(str(err), config_data)
+        generate_scrit_problem_email(str(err), config_data)
 
     return status_of_devices
 
@@ -380,14 +380,14 @@ def generate_event_alert_email(config_data: ConfigData, email_alert: str) -> Non
         sys.exit(f'ERROR: {err}\nCheck connection to SMTP server. Exiting...')
 
 
-def generate_cluster_timeout_email(error: str, config_data: ConfigData) -> None:
+def generate_scrit_problem_email(error: str, config_data: ConfigData) -> None:
     """
-    Build and send cluster connection timeout alert email.
+    Build and send script problem alert email.
     """
-    subject = f'Script failure for Qumulo cluster: {config_data.cluster_name}'
+    subject = f'Script problem for Qumulo cluster: {config_data.cluster_name}'
     body = (
         'The cluster_device_monitor.py script has encountered a '
-        'failure and the script has stopped running.<br>'
+        'problem and the script has stopped running.<br>'
         "Please check the machine's connection to the cluster over "
         'the required port (default 8000).<br>'
         f'config_data.json - cluster IP: {config_data.cluster_address}<br>'
@@ -396,7 +396,7 @@ def generate_cluster_timeout_email(error: str, config_data: ConfigData) -> None:
     )
     eml = EmailMessage(config_data, subject, body)
 
-    print('ALERT!! Script encountered a failure. See below for details.')
+    print('ALERT!! Script encountered a problem. See below for details.')
 
     try:
         eml.send()
