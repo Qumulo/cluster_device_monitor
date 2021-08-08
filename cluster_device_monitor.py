@@ -173,12 +173,8 @@ def check_cluster_connectivity(config_data: ConfigData) -> None:
         sock.connect((config_data.cluster_address, config_data.rest_port))
         sock.shutdown(socket.SHUT_WR)
         sock.close()
-    except ConnectionRefusedError as err:
-        sys.exit(f'ERROR:{err}\nCheck port connectivity & try again. Exiting...')
-    except TimeoutError as err:
-        sys.exit(f'ERROR: {err}\nCheck connection & try again. Exiting...')
-    except socket.timeout as err:
-        sys.exit(f'ERROR: {err}\nCheck connection & try again. Exiting...')
+    except (ConnectionRefusedError, TimeoutError) as err:
+        generate_script_problem_email(str(err), config_data)
 
 
 def delete_previous_cluster_status() -> None:
@@ -205,11 +201,8 @@ def cluster_login(config_data: ConfigData) -> Optional[RestClient]:
     try:
         rest_client = RestClient(config_data.cluster_address, config_data.rest_port)
         rest_client.login(config_data.username, config_data.password)
-    except TimeoutError as err:
-        generate_scrit_problem_email(str(err), config_data)
-    except RequestError as err:
-        print('ERROR: Invalid credentials. Please check config file & try again.')
-        generate_scrit_problem_email(str(err), config_data)
+    except (TimeoutError, RequestError) as err:
+        generate_script_problem_email(str(err), config_data)
 
     return rest_client
 
@@ -232,7 +225,7 @@ def qq_api_query(
         elif api_call == 'cluster_uuid':
             response = rest_client.node_state.get_node_state()['cluster_id']
     except TimeoutError as err:
-        generate_scrit_problem_email(str(err), config_data)
+        generate_script_problem_email(str(err), config_data)
 
     return response
 
@@ -251,7 +244,7 @@ def retrieve_status_of_cluster_devices(
         elif device_type == 'drives':
             status_of_devices['drives'] = rest_client.cluster.get_cluster_slots_status()
     except TimeoutError as err:
-        generate_scrit_problem_email(str(err), config_data)
+        generate_script_problem_email(str(err), config_data)
 
     return status_of_devices
 
@@ -380,7 +373,7 @@ def generate_event_alert_email(config_data: ConfigData, email_alert: str) -> Non
         sys.exit(f'ERROR: {err}\nCheck connection to SMTP server. Exiting...')
 
 
-def generate_scrit_problem_email(error: str, config_data: ConfigData) -> None:
+def generate_script_problem_email(error: str, config_data: ConfigData) -> None:
     """
     Build and send script problem alert email.
     """
