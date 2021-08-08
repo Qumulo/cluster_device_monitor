@@ -264,7 +264,7 @@ def preserve_cluster_status(cluster_status: Dict[str, Any]) -> None:
     cluster_status_json = 'cluster_status.json'
     cluster_status_previous_json = 'cluster_status_previous.json'
 
-    if cluster_status in os.listdir():
+    if cluster_status_json in os.listdir():
         os.rename(cluster_status_json, cluster_status_previous_json)
     with open(cluster_status_json, 'w') as file:
         json.dump(cluster_status, file, indent=4)
