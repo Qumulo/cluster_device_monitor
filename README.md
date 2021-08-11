@@ -13,8 +13,9 @@
 
 ## ChangeLog
 
-* 07/30/21: V2.0 - Completely refactored with unit testing integration.
-*  06/15/21: V1.0 - Functional and completed, for now!
+*  08/10/21: v2.1 - Refactored
+*  07/30/21: v2.0 - Completely refactored with unit testing integration.
+*  06/15/21: v1.0 - Functional and completed, for now!
 
 ## Introduction
 This script generates email alerts for a Qumulo cluster using the REST API when offline nodes & unhealthy drives are found.
