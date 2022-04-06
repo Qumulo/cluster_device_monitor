@@ -1,3 +1,7 @@
+# Deprecation Notice
+
+**This software will shortly be deprecated and archived. If you have any issues, please reach out to [Michael Kade](mailto:mkade@qumulo.com) directly.**
+
 # Qumulo Cluster Device Monitor
 
 ## Table of contents
